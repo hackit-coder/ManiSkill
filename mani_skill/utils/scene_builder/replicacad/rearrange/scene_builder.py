@@ -102,7 +102,7 @@ class ReplicaCADRearrangeSceneBuilder(ReplicaCADSceneBuilder):
         ), f"got one or more unused build_config_idxs in {build_config_idxs}; This RCAD Rearrange task only uses the following build_config_idxs: {self.used_build_config_idxs}"
         assert (
             len(build_config_idxs) == self.env.num_envs
-        ), f"Got {len(build_config_idxs)} build_config_idxs but only have {self.env.num_envs} envs"
+        ), f"Got {len(build_config_idxs)} build_config_idxs but have {self.env.num_envs} envs"
 
         # the build_config_idxs are idxs for the RCAD build configs
         # super().build builds the base RCAD scenes (including static objects)
