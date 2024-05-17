@@ -1,9 +1,3 @@
-"""
-Code for building scenes from the ReplicaCAD dataset https://aihabitat.org/datasets/replica_cad/
-
-This code is also heavily commented to serve as a tutorial for how to build custom scenes from scratch and/or port scenes over from other datasets/simulators
-"""
-
 import json
 import os
 import os.path as osp
@@ -24,7 +18,7 @@ from mani_skill.utils.scene_builder.registration import register_scene_builder
 from mani_skill.utils.structs import Actor
 from mani_skill.utils.building import actors
 
-from ..scene_builder import ReplicaCADSceneBuilder
+from mani_skill.utils.scene_builder.replicacad import ReplicaCADSceneBuilder
 
 HIDDEN_OBJ_COLLISION_GROUP = 30
 HIDDEN_POSE = sapien.Pose(p=[99999] * 3)
@@ -68,7 +62,7 @@ class ReplicaCADRearrangeSceneBuilder(ReplicaCADSceneBuilder):
                     os.listdir(
                         osp.join(
                             ASSET_DIR,
-                            "scene_datasets/replica_cad_dataset/rearrange/v1_extracted",
+                            "scene_datasets/replica_cad_dataset/rearrange",
                             split,
                             task,
                         ),
@@ -84,7 +78,7 @@ class ReplicaCADRearrangeSceneBuilder(ReplicaCADSceneBuilder):
             with open(
                 osp.join(
                     ASSET_DIR,
-                    "scene_datasets/replica_cad_dataset/rearrange/v1_extracted",
+                    "scene_datasets/replica_cad_dataset/rearrange",
                     rc,
                 ),
                 "rb",
@@ -102,7 +96,7 @@ class ReplicaCADRearrangeSceneBuilder(ReplicaCADSceneBuilder):
         ), f"got one or more unused build_config_idxs in {build_config_idxs}; This RCAD Rearrange task only uses the following build_config_idxs: {self.used_build_config_idxs}"
         assert (
             len(build_config_idxs) == self.env.num_envs
-        ), f"Got {len(build_config_idxs)} build_config_idxs but have {self.env.num_envs} envs"
+        ), f"Got {len(build_config_idxs)} build_config_idxs but only have {self.env.num_envs} envs"
 
         # the build_config_idxs are idxs for the RCAD build configs
         # super().build builds the base RCAD scenes (including static objects)
@@ -131,7 +125,7 @@ class ReplicaCADRearrangeSceneBuilder(ReplicaCADSceneBuilder):
             with open(
                 osp.join(
                     ASSET_DIR,
-                    "scene_datasets/replica_cad_dataset/rearrange/v1_extracted",
+                    "scene_datasets/replica_cad_dataset/rearrange",
                     rc,
                 ),
                 "rb",
