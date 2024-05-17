@@ -98,9 +98,10 @@ class PickSubtaskTrainEnv(SubtaskTrainEnv):
     def _get_obs_state_dict(self, info: Dict):
         state_dict = super()._get_obs_state_dict(info)
 
-        for key in state_dict["extra"].keys():
-            if key not in PICK_OBS_EXTRA_KEYS:
-                state_dict["extra"].pop(key, None)
+        state_dict_extra = dict()
+        for key in PICK_OBS_EXTRA_KEYS:
+            state_dict_extra[key] = state_dict["extra"][key]
+        state_dict["extra"] = state_dict_extra
 
         return state_dict
 
