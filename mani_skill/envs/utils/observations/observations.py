@@ -60,7 +60,7 @@ def sensor_data_to_rgbd(
     return observation
 
 
-def sensor_data_to_pointcloud(observation: Dict, sensors: Dict[str, BaseSensor]):
+def sensor_data_to_pointcloud(observation: Dict, sensors: Dict[str, BaseSensor], sampling_config: dict):
     """convert all camera data in sensor to pointcloud data"""
     sensor_data = observation["sensor_data"]
     camera_params = observation["sensor_param"]
@@ -83,6 +83,10 @@ def sensor_data_to_pointcloud(observation: Dict, sensors: Dict[str, BaseSensor])
             position[..., :3] = (
                 position[..., :3] / 1000.0
             )  # convert the raw depth from millimeters to meters
+
+            if sampling_config is not None:
+                position = apply_sampling_policy(position, sampling_config=sampling_config)
+
 
             # Convert to world space
             cam2world = camera_params[cam_uid]["cam2world_gl"]
@@ -113,3 +117,37 @@ def sensor_data_to_pointcloud(observation: Dict, sensors: Dict[str, BaseSensor])
     #         observation["pointcloud"]["segmentation"].numpy().astype(np.uint16)
     #     )
     return observation
+
+
+
+def apply_sampling_policy(position, sampling_config):
+    """Apply the specified sampling policy to the pointcloud data"""
+    position = position.reshape(position.shape[0], -1, 4)
+    num_points = position.shape[1]
+    sampling_policy = sampling_config["policy"]
+    num_samples = sampling_config["num_samples"]
+
+    if sampling_policy == "uniform":
+        indices = torch.randperm(num_points)[:num_samples]
+    elif sampling_policy == "random":
+        probabilities = torch.ones(num_points) / num_points
+        indices = torch.multinomial(probabilities, num_samples, replacement=False)
+    elif sampling_policy == "farthest_point":
+        # Initialize the farthest point sampling
+        centroids = torch.zeros((num_samples,), dtype=torch.long)
+        distances = torch.ones((num_points,)).to(position.device) * 1e10
+        farthest = torch.randint(0, num_points, (1,))
+        for i in range(num_samples):
+            centroids[i] = farthest
+            centroid = position[0, farthest, :3]
+            dist = torch.sum((position[0, :, :3] - centroid) ** 2, dim=-1)
+            mask = dist < distances
+            distances[mask] = dist[mask]
+            farthest = torch.max(distances, dim=-1)[1]
+        indices = centroids
+    else:
+        raise ValueError(f"Unsupported sampling policy: {sampling_policy}")
+
+    # apply the indices to the position data
+    position = position[:, indices, :]
+    return position

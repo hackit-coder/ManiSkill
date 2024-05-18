@@ -147,11 +147,13 @@ class BaseEnv(gym.Env):
         sim_cfg: Union[SimConfig, dict] = dict(),
         reconfiguration_freq: int = None,
         sim_backend: str = "auto",
+        sampling_config: dict = None,
     ):
         self.num_envs = num_envs
         self.reconfiguration_freq = reconfiguration_freq if reconfiguration_freq is not None else 0
         self._reconfig_counter = 0
         self._custom_sensor_configs = sensor_configs
+        self._sampling_config = sampling_config
         self._custom_human_render_camera_configs = human_render_camera_configs
         self.robot_uids = robot_uids
         if self.SUPPORTED_ROBOTS is not None:
@@ -406,7 +408,7 @@ class BaseEnv(gym.Env):
                 # NOTE (stao): this obs mode is merely a convenience, it does not make simulation run noticebally faster
                 obs = sensor_data_to_rgbd(obs, self._sensors, rgb=True, depth=False, segmentation=True)
             elif self.obs_mode == "pointcloud":
-                obs = sensor_data_to_pointcloud(obs, self._sensors)
+                obs = sensor_data_to_pointcloud(obs, self._sensors, sampling_config=self._sampling_config)
         else:
             raise NotImplementedError(self._obs_mode)
         return obs
