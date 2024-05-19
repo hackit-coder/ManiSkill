@@ -174,22 +174,28 @@ class PickSubtaskTrainEnv(SubtaskTrainEnv):
 
             # ---------------------------------------------------------------
             # colliisions
-            step_no_col_rew = 1 - torch.tanh(
-                3
-                * (
-                    torch.clamp(
-                        self.robot_force_mult * info["robot_force"],
-                        min=self.robot_force_penalty_min,
+            step_no_col_rew = 3 * (
+                1
+                - torch.tanh(
+                    3
+                    * (
+                        torch.clamp(
+                            self.robot_force_mult * info["robot_force"],
+                            min=self.robot_force_penalty_min,
+                        )
+                        - self.robot_force_penalty_min
                     )
-                    - self.robot_force_penalty_min
                 )
             )
             reward += step_no_col_rew
 
             # cumulative collision penalty
             cum_col_under_thresh_rew = (
-                info["robot_cumulative_force"] < self.robot_cumulative_force_limit
-            ).float()
+                2
+                * (
+                    info["robot_cumulative_force"] < self.robot_cumulative_force_limit
+                ).float()
+            )
             reward += cum_col_under_thresh_rew
             # ---------------------------------------------------------------
 
@@ -241,7 +247,7 @@ class PickSubtaskTrainEnv(SubtaskTrainEnv):
     def compute_normalized_dense_reward(
         self, obs: Any, action: torch.Tensor, info: Dict
     ):
-        max_reward = 21.0
+        max_reward = 24.0
         return self.compute_dense_reward(obs=obs, action=action, info=info) / max_reward
 
     # -------------------------------------------------------------------------------------------------
