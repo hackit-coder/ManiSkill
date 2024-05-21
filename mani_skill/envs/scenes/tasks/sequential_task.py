@@ -404,7 +404,7 @@ class SequentialTaskEnv(SceneManipulationEnv):
         env_idx: torch.Tensor,
         ee_rest_thresh: float = 0.05,
     ):
-        is_grasped = self.agent.is_grasping(obj, max_angle=30)[env_idx]
+        is_grasped = self.agent.is_grasping(obj, max_angle=85)[env_idx]
         ee_rest = (
             torch.norm(
                 self.agent.tcp_pose.p[env_idx] - self.ee_rest_world_pose.p[env_idx],
@@ -423,7 +423,7 @@ class SequentialTaskEnv(SceneManipulationEnv):
         obj_goal_thresh: float = 0.15,
         ee_rest_thresh: float = 0.05,
     ):
-        is_grasped = self.agent.is_grasping(obj, max_angle=30)[env_idx]
+        is_grasped = self.agent.is_grasping(obj, max_angle=85)[env_idx]
         obj_at_goal = (
             torch.norm(obj.pose.p[env_idx] - obj_goal.pose.p[env_idx], dim=1)
             <= obj_goal_thresh
@@ -446,7 +446,7 @@ class SequentialTaskEnv(SceneManipulationEnv):
         ee_rest_thresh: float = 0.05,
     ):
         if obj is not None:
-            is_grasped = self.agent.is_grasping(obj, max_angle=30)[env_idx]
+            is_grasped = self.agent.is_grasping(obj, max_angle=85)[env_idx]
         else:
             is_grasped = torch.zeros_like(env_idx, dtype=torch.bool)
 
