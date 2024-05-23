@@ -85,7 +85,6 @@ class SubtaskTrainEnv(SequentialTaskEnv):
         force_rew_ignore_links = [
             self.agent.finger1_link,
             self.agent.finger2_link,
-            self.agent.tcp,
         ]
         self.force_articulation_link_ids = [
             link.name
