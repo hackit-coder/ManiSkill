@@ -136,10 +136,6 @@ class SubtaskTrainEnv(SequentialTaskEnv):
                 )
                 rots %= 2 * torch.pi
 
-                self.resting_qpos = torch.tensor(
-                    self.agent.keyframes["rest"].qpos[3:-2]
-                )
-
                 # NOTE (arth): it is assumed that scene builder spawns agent with some qpos
                 qpos = self.agent.robot.get_qpos()
 
@@ -182,11 +178,14 @@ class SubtaskTrainEnv(SequentialTaskEnv):
                         torch.normal(0, 0.25, qpos[env_idx, 2:3].shape), -0.5, 0.5
                     ).to(self.device)
                 if self.randomize_arm:
+                    rrqd = self.pick_cfg.robot_init_qpos_noise
                     qpos[env_idx, 5:6] += torch.clamp(
-                        torch.normal(0, 0.05, qpos[env_idx, 5:6].shape), -0.1, 0.1
+                        torch.normal(0, rrqd / 2, qpos[env_idx, 5:6].shape), -rrqd, rrqd
                     ).to(self.device)
                     qpos[env_idx, 7:-2] += torch.clamp(
-                        torch.normal(0, 0.05, qpos[env_idx, 7:-2].shape), -0.1, 0.1
+                        torch.normal(0, rrqd / 2, qpos[env_idx, 7:-2].shape),
+                        -rrqd,
+                        rrqd,
                     ).to(self.device)
                 self.agent.reset(qpos)
 

@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Tuple, Union
 import sapien
 import torch
 import torch.random
+import numpy as np
 
 from mani_skill.agents.robots import Fetch
 from mani_skill.envs.scenes.base_env import SceneManipulationEnv
@@ -237,7 +238,6 @@ class SequentialTaskEnv(SceneManipulationEnv):
         pos: Union[Tuple[float, float, float], List[Tuple[float, float, float]]] = None,
         radius=0.15,
         name="goal_site",
-        scene_mask=None,
     ):
         goal = actors.build_sphere(
             self.scene,
@@ -271,9 +271,26 @@ class SequentialTaskEnv(SceneManipulationEnv):
             self.build_config_idx_to_task_plans[
                 self.scene_builder.build_config_names_to_idxs[bc]
             ] = self.base_task_plans[bc]
-        self.build_config_idxs = sorted(
-            list(self.build_config_idx_to_task_plans.keys())
-        )
+
+        num_bcis = len(self.build_config_idx_to_task_plans.keys())
+        assert (
+            num_bcis <= self.num_envs
+        ), f"Cannot build {num_bcis} build configs in only {self.num_envs} envs"
+
+        # if num_bcis < self.num_envs, repeat bcis and truncate at self.num_envs
+        # TODO (arth): decide if this is a good option
+        #   (e.g. if user wants 1 build config / env but accidentally passed num_envs
+        #   value that was 1 too large, then they wouldn't know)
+        self.build_config_idxs = np.repeat(
+            sorted(list(self.build_config_idx_to_task_plans.keys())),
+            np.ceil(self.num_envs / num_bcis) * num_bcis,
+        )[: self.num_envs].tolist()
+        self.num_task_plans_per_bci = torch.tensor(
+            [
+                len(self.build_config_idx_to_task_plans[bci])
+                for bci in self.build_config_idxs
+            ]
+        ).to(self.device)
         super()._load_scene(options)
         self.ee_rest_pos_wrt_base = Pose.create_from_pq(
             p=self.EE_REST_POS_WRT_BASE, device=self.device
@@ -291,12 +308,7 @@ class SequentialTaskEnv(SceneManipulationEnv):
 
     def _initialize_episode(self, env_idx: torch.Tensor, options):
         low = torch.zeros(len(self.build_config_idxs))
-        high = torch.tensor(
-            [
-                len(self.build_config_idx_to_task_plans[bci])
-                for bci in self.build_config_idxs
-            ]
-        )
+        high = self.num_task_plans_per_bci
         size = (len(self.build_config_idxs),)
         task_plan_idxs: List[int] = (
             (torch.randint(2**63 - 1, size=size) % (high - low) + low).int().tolist()
@@ -319,6 +331,8 @@ class SequentialTaskEnv(SceneManipulationEnv):
             self.task_plan[0].type
         ].horizon
 
+        self.resting_qpos = torch.tensor(self.agent.keyframes["rest"].qpos[3:-2])
+
     # -------------------------------------------------------------------------------------------------
 
     # -------------------------------------------------------------------------------------------------
@@ -326,7 +340,7 @@ class SequentialTaskEnv(SceneManipulationEnv):
     # -------------------------------------------------------------------------------------------------
 
     def evaluate(self):
-        subtask_success, is_grasped = self._subtask_check_success()
+        subtask_success, success_checkers = self._subtask_check_success()
 
         self.subtask_pointer[subtask_success] += 1
         success = self.subtask_pointer >= len(self.task_plan)
@@ -347,15 +361,17 @@ class SequentialTaskEnv(SceneManipulationEnv):
         return dict(
             success=success,
             fail=fail,
-            is_grasped=is_grasped,
             subtask=self.subtask_pointer,
             subtask_type=subtask_type,
             subtasks_steps_left=self.subtask_steps_left,
+            **success_checkers,
         )
 
     def _subtask_check_success(self):
-        subtask_success = torch.zeros(self.num_envs, device=self.device, dtype=bool)
-        is_grasped = torch.zeros(self.num_envs, device=self.device, dtype=bool)
+        subtask_success = torch.zeros(
+            self.num_envs, device=self.device, dtype=torch.bool
+        )
+        success_checkers = dict()
 
         currently_running_subtasks = torch.unique(
             torch.clip(self.subtask_pointer, max=len(self.task_plan) - 1)
@@ -366,7 +382,7 @@ class SequentialTaskEnv(SceneManipulationEnv):
             if isinstance(subtask, PickSubtask):
                 (
                     subtask_success[env_idx],
-                    is_grasped[env_idx],
+                    subtask_success_checkers,
                 ) = self._pick_check_success(
                     self.subtask_objs[subtask_num],
                     env_idx,
@@ -375,7 +391,7 @@ class SequentialTaskEnv(SceneManipulationEnv):
             elif isinstance(subtask, PlaceSubtask):
                 (
                     subtask_success[env_idx],
-                    is_grasped[env_idx],
+                    subtask_success_checkers,
                 ) = self._place_check_success(
                     self.subtask_objs[subtask_num],
                     self.subtask_goals[subtask_num],
@@ -386,7 +402,7 @@ class SequentialTaskEnv(SceneManipulationEnv):
             elif isinstance(subtask, NavigateSubtask):
                 (
                     subtask_success[env_idx],
-                    is_grasped[env_idx],
+                    subtask_success_checkers,
                 ) = self._navigate_check_success(
                     self.subtask_objs[subtask_num],
                     self.subtask_goals[subtask_num],
@@ -396,7 +412,14 @@ class SequentialTaskEnv(SceneManipulationEnv):
             else:
                 raise AttributeError(f"{subtask.type} {type(subtask)} not supported")
 
-        return subtask_success, is_grasped
+            for k, v in subtask_success_checkers.items():
+                if k not in success_checkers:
+                    success_checkers[k] = torch.zeros(
+                        self.num_envs, device=self.device, dtype=torch.bool
+                    )
+                success_checkers[k][env_idx] = subtask_success_checkers[k]
+
+        return subtask_success, success_checkers
 
     def _pick_check_success(
         self,
@@ -412,8 +435,22 @@ class SequentialTaskEnv(SceneManipulationEnv):
             )
             <= ee_rest_thresh
         )
+        robot_rest_dist = torch.abs(
+            self.agent.robot.qpos[env_idx, 3:-2] - self.resting_qpos
+        )
+        robot_rest = torch.all(
+            robot_rest_dist < self.pick_cfg.robot_resting_qpos_tolerance, dim=1
+        )
         is_static = self.agent.is_static(threshold=0.2)[env_idx]
-        return is_grasped & ee_rest & is_static, is_grasped
+        return (
+            is_grasped & ee_rest & robot_rest & is_static,
+            dict(
+                is_grasped=is_grasped,
+                ee_rest=ee_rest,
+                robot_rest=robot_rest,
+                is_static=is_static,
+            ),
+        )
 
     def _place_check_success(
         self,
@@ -435,8 +472,23 @@ class SequentialTaskEnv(SceneManipulationEnv):
             )
             <= ee_rest_thresh
         )
+        robot_rest_dist = torch.abs(
+            self.agent.robot.qpos[env_idx, 3:-2] - self.resting_qpos
+        )
+        robot_rest = torch.all(
+            robot_rest_dist < self.pick_cfg.robot_resting_qpos_tolerance, dim=1
+        )
         is_static = self.agent.is_static(threshold=0.2)[env_idx]
-        return ~is_grasped & obj_at_goal & ee_rest & is_static, is_grasped
+        return (
+            ~is_grasped & obj_at_goal & ee_rest & robot_rest & is_static,
+            dict(
+                is_grasped=is_grasped,
+                obj_at_goal=obj_at_goal,
+                ee_rest=ee_rest,
+                robot_rest=robot_rest,
+                is_static=is_static,
+            ),
+        )
 
     def _navigate_check_success(
         self,
@@ -466,17 +518,29 @@ class SequentialTaskEnv(SceneManipulationEnv):
             )
             <= ee_rest_thresh
         )
+        robot_rest_dist = torch.abs(
+            self.agent.robot.qpos[env_idx, 3:-2] - self.resting_qpos
+        )
+        robot_rest = torch.all(
+            robot_rest_dist < self.pick_cfg.robot_resting_qpos_tolerance, dim=1
+        )
         is_static = self.agent.is_static(threshold=0.2)[env_idx]
+        navigate_success = (
+            oriented_correctly & navigated_close & ee_rest & robot_rest & is_static
+        )
         if obj is not None:
-            return (
-                is_grasped & oriented_correctly & navigated_close & ee_rest & is_static,
-                is_grasped,
-            )
-        else:
-            return (
-                oriented_correctly & navigated_close & ee_rest & is_static,
-                is_grasped,
-            )
+            navigate_success &= is_grasped
+        return (
+            navigate_success,
+            dict(
+                is_grasped=is_grasped,
+                oriented_correctly=oriented_correctly,
+                navigated_close=navigated_close,
+                ee_rest=ee_rest,
+                robot_rest=robot_rest,
+                is_static=is_static,
+            ),
+        )
 
     # -------------------------------------------------------------------------------------------------
 

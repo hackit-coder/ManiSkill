@@ -45,6 +45,7 @@ class PickSubtaskTrainEnv(SubtaskTrainEnv):
         ee_rest_thresh=0.05,
     )
     place_cfg = None
+    navigate_cfg = None
 
     def __init__(
         self,
@@ -139,10 +140,12 @@ class PickSubtaskTrainEnv(SubtaskTrainEnv):
             is_grasped = info["is_grasped"]
             is_grasped_reward = torch.zeros_like(reward[is_grasped])
 
-            ee_rest = is_grasped & (
-                torch.norm(tcp_pos - rest_pos, dim=1) <= self.pick_cfg.ee_rest_thresh
+            robot_ee_rest_and_grasped = (
+                is_grasped & info["ee_rest"] & info["robot_rest"]
             )
-            ee_rest_reward = torch.zeros_like(reward[ee_rest])
+            robot_ee_rest_and_grasped_reward = torch.zeros_like(
+                reward[robot_ee_rest_and_grasped]
+            )
 
             # ---------------------------------------------------
 
@@ -227,27 +230,40 @@ class PickSubtaskTrainEnv(SubtaskTrainEnv):
                 place_rew = 5 * (1 - torch.tanh(3 * ee_to_rest_dist))
                 is_grasped_reward += place_rew
 
+                # arm_to_resting_diff_again
+                arm_to_resting_diff_again = torch.norm(
+                    self.agent.robot.qpos[is_grasped, 3:-2] - self.resting_qpos,
+                    dim=1,
+                )
+                arm_to_resting_diff_again_reward = 1 - torch.tanh(
+                    arm_to_resting_diff_again / 5
+                )
+                is_grasped_reward += arm_to_resting_diff_again_reward
+
                 # penalty for base moving or rotating too much
                 bqvel = self.agent.robot.qvel[..., :3][is_grasped]
                 base_still_rew = 1 - torch.tanh(torch.norm(bqvel, dim=1))
                 is_grasped_reward += base_still_rew
 
-            if torch.any(ee_rest):
-                qvel = self.agent.robot.qvel[..., :-2][ee_rest]
-                static_rew = 1 - torch.tanh(torch.norm(qvel, dim=1))
-                ee_rest_reward += static_rew
+                if torch.any(robot_ee_rest_and_grasped):
+                    # increment to encourage robot and ee staying in rest
+                    robot_ee_rest_and_grasped_reward += 2
+
+                    qvel = self.agent.robot.qvel[..., :-2][robot_ee_rest_and_grasped]
+                    static_rew = 1 - torch.tanh(torch.norm(qvel, dim=1))
+                    robot_ee_rest_and_grasped_reward += static_rew
 
             # add rewards to specific envs
             reward[not_grasped] += not_grasped_reward
             reward[is_grasped] += is_grasped_reward
-            reward[ee_rest] += ee_rest_reward
+            reward[robot_ee_rest_and_grasped] += robot_ee_rest_and_grasped_reward
 
         return reward
 
     def compute_normalized_dense_reward(
         self, obs: Any, action: torch.Tensor, info: Dict
     ):
-        max_reward = 24.0
+        max_reward = 27.0
         return self.compute_dense_reward(obs=obs, action=action, info=info) / max_reward
 
     # -------------------------------------------------------------------------------------------------

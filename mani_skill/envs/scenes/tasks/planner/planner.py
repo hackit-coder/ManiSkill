@@ -25,6 +25,8 @@ class Subtask:
 class SubtaskConfig:
     task_id: int
     horizon: int = -1
+    robot_init_qpos_noise: float = 0.2
+    robot_resting_qpos_tolerance: float = 0.6
 
     def __post_init__(self):
         assert self.horizon > 0
