@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Tuple, Union
 import sapien
 import torch
 import torch.random
+import numpy as np
 
 from mani_skill.agents.robots import Fetch
 from mani_skill.envs.scenes.base_env import SceneManipulationEnv
@@ -237,7 +238,6 @@ class SequentialTaskEnv(SceneManipulationEnv):
         pos: Union[Tuple[float, float, float], List[Tuple[float, float, float]]] = None,
         radius=0.15,
         name="goal_site",
-        scene_mask=None,
     ):
         goal = actors.build_sphere(
             self.scene,
@@ -271,9 +271,26 @@ class SequentialTaskEnv(SceneManipulationEnv):
             self.build_config_idx_to_task_plans[
                 self.scene_builder.build_config_names_to_idxs[bc]
             ] = self.base_task_plans[bc]
-        self.build_config_idxs = sorted(
-            list(self.build_config_idx_to_task_plans.keys())
-        )
+
+        num_bcis = len(self.build_config_idx_to_task_plans.keys())
+        assert (
+            num_bcis <= self.num_envs
+        ), f"Cannot build {num_bcis} build configs in only {self.num_envs} envs"
+
+        # if num_bcis < self.num_envs, repeat bcis and truncate at self.num_envs
+        # TODO (arth): decide if this is a good option
+        #   (e.g. if user wants 1 build config / env but accidentally passed num_envs
+        #   value that was 1 too large, then they wouldn't know)
+        self.build_config_idxs = np.repeat(
+            sorted(list(self.build_config_idx_to_task_plans.keys())),
+            np.ceil(self.num_envs / num_bcis) * num_bcis,
+        )[: self.num_envs].tolist()
+        self.num_task_plans_per_bci = torch.tensor(
+            [
+                len(self.build_config_idx_to_task_plans[bci])
+                for bci in self.build_config_idxs
+            ]
+        ).to(self.device)
         super()._load_scene(options)
         self.ee_rest_pos_wrt_base = Pose.create_from_pq(
             p=self.EE_REST_POS_WRT_BASE, device=self.device
@@ -291,12 +308,7 @@ class SequentialTaskEnv(SceneManipulationEnv):
 
     def _initialize_episode(self, env_idx: torch.Tensor, options):
         low = torch.zeros(len(self.build_config_idxs))
-        high = torch.tensor(
-            [
-                len(self.build_config_idx_to_task_plans[bci])
-                for bci in self.build_config_idxs
-            ]
-        )
+        high = self.num_task_plans_per_bci
         size = (len(self.build_config_idxs),)
         task_plan_idxs: List[int] = (
             (torch.randint(2**63 - 1, size=size) % (high - low) + low).int().tolist()
