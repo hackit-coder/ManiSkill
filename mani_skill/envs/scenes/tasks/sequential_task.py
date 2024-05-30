@@ -9,7 +9,7 @@ import numpy as np
 from mani_skill.agents.robots import Fetch
 from mani_skill.envs.scenes.base_env import SceneManipulationEnv
 from mani_skill.sensors.camera import CameraConfig
-from mani_skill.utils import sapien_utils
+from mani_skill.utils import sapien_utils, common
 from mani_skill.utils.building import actors
 from mani_skill.utils.registration import register_env
 from mani_skill.utils.structs import Actor, Pose
@@ -120,6 +120,8 @@ class SequentialTaskEnv(SceneManipulationEnv):
     # -------------------------------------------------------------------------------------------------
 
     def process_task_plan(self, sampled_subtask_lists: List[List[Subtask]]):
+
+        self.agent.queries = dict()
 
         self.subtask_objs: List[Actor] = []
         self.subtask_goals: List[Actor] = []
@@ -307,15 +309,19 @@ class SequentialTaskEnv(SceneManipulationEnv):
         )
 
     def _initialize_episode(self, env_idx: torch.Tensor, options):
-        low = torch.zeros(len(self.build_config_idxs))
-        high = self.num_task_plans_per_bci
-        size = (len(self.build_config_idxs),)
-        task_plan_idxs: List[int] = (
-            (torch.randint(2**63 - 1, size=size) % (high - low) + low).int().tolist()
-        )
+        self.task_plan_idxs = options.pop("task_plan_idxs", None)
+        if self.task_plan_idxs is None:
+            low = torch.zeros(len(self.build_config_idxs))
+            high = self.num_task_plans_per_bci
+            size = (len(self.build_config_idxs),)
+            self.task_plan_idxs: List[int] = (
+                (torch.randint(2**63 - 1, size=size) % (high - low) + low)
+                .int()
+                .tolist()
+            )
         sampled_task_plans = [
             self.build_config_idx_to_task_plans[bci][tpi]
-            for bci, tpi in zip(self.build_config_idxs, task_plan_idxs)
+            for bci, tpi in zip(self.build_config_idxs, self.task_plan_idxs)
         ]
         self.init_config_idxs = [
             self.scene_builder.init_config_names_to_idxs[tp.init_config_name]
@@ -332,6 +338,47 @@ class SequentialTaskEnv(SceneManipulationEnv):
         ].horizon
 
         self.resting_qpos = torch.tensor(self.agent.keyframes["rest"].qpos[3:-2])
+
+    # -------------------------------------------------------------------------------------------------
+
+    # -------------------------------------------------------------------------------------------------
+    # STATE RESET
+    # -------------------------------------------------------------------------------------------------
+
+    def get_state_dict(self):
+        state_dict = super().get_state_dict()
+
+        state_dict["task_plan_idxs"] = self.task_plan_idxs
+        state_dict["build_config_idxs"] = self.build_config_idxs
+        state_dict["init_config_idxs"] = self.init_config_idxs
+
+        state_dict["subtask_pointer"] = self.subtask_pointer
+        state_dict["subtask_steps_left"] = self.subtask_steps_left
+
+        return state_dict
+
+    def set_state_dict(self, state_dict: Dict):
+
+        task_plan_idxs = state_dict.pop("task_plan_idxs")
+        build_config_idxs = state_dict.pop("build_config_idxs")
+        init_config_idxs = state_dict.pop("init_config_idxs")
+
+        assert torch.all(
+            torch.tensor(self.build_config_idxs) == torch.tensor(build_config_idxs)
+        ), f"Please pass the same task plan list when creating this env as was used in this state dict; currently built build_config_idxs={self.build_config_idxs}, state dict build_config_idxs={build_config_idxs}"
+
+        self._initialize_episode(
+            torch.arange(self.num_envs), options=dict(task_plan_idxs=task_plan_idxs)
+        )
+
+        assert torch.all(
+            torch.tensor(self.init_config_idxs) == torch.tensor(init_config_idxs)
+        ), f"Please pass the same task plan list when creating this env as was used in this state dict; currently init'd init_config_idxs={self.init_config_idxs}, state dict init_config_idxs={init_config_idxs}"
+
+        self.subtask_pointer = state_dict.pop("subtask_pointer")
+        self.subtask_steps_left = state_dict.pop("subtask_steps_left")
+
+        super().set_state_dict(state_dict)
 
     # -------------------------------------------------------------------------------------------------
 
