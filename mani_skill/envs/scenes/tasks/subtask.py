@@ -199,13 +199,18 @@ class SubtaskTrainEnv(SequentialTaskEnv):
                     self.scene._gpu_fetch_all()
                 self.scene.step()
 
-                robot_force = (
-                    self.agent.robot.get_net_contact_forces(
-                        self.force_articulation_link_ids
+                if physx.is_gpu_enabled():
+                    robot_force = (
+                        self.agent.robot.get_net_contact_forces(
+                            self.force_articulation_link_ids
+                        )
+                        .norm(dim=-1)
+                        .sum(dim=-1)
                     )
-                    .norm(dim=-1)
-                    .sum(dim=-1)
-                )
+                else:
+                    robot_force = self.agent.robot.get_net_contact_forces(
+                        self.force_articulation_link_ids
+                    ).norm(dim=-1)
 
                 self.scene_builder.initialize(original_env_idx, self.init_config_idxs)
                 self.agent.reset(robot_init_qpos)
