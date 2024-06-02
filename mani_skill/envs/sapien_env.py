@@ -528,18 +528,27 @@ class BaseEnv(gym.Env):
         shape changes each time and the faucet model changes each time respectively.
         """
 
+        print("set up scene, loading agent, scene, lighting...")
         self._clear()
         # load everything into the scene first before initializing anything
         self._setup_scene()
+        print("scene set up!")
         self._load_agent(options)
+        print("agent loaded!")
         self._load_scene(options)
+        print("scene loaded!")
 
         self._load_lighting(options)
+        print("lighting loaded!")
 
+        print("setting up gpu...")
         if physx.is_gpu_enabled():
             self.scene._setup_gpu()
+        print("gpu set up!")
         # for GPU sim, we have to setup sensors after we call setup gpu in order to enable loading mounted sensors as they depend on GPU buffer data
+        print("setting up sensors...")
         self._setup_sensors(options)
+        print("sensors set up!")
         if self._viewer is not None:
             self._setup_viewer()
         self._reconfig_counter = self.reconfiguration_freq
@@ -672,8 +681,12 @@ class BaseEnv(gym.Env):
         if reconfigure:
             with torch.random.fork_rng():
                 torch.manual_seed(seed=self._episode_seed)
+                print("reconfiguring...")
                 self._reconfigure(options)
+                print("reconfigured!")
+                print("after reconfiguring...")
                 self._after_reconfigure(options)
+                print("after reconfigured!")
 
         # TODO (stao): Reconfiguration when there is partial reset might not make sense and certainly broken here now.
         # Solution to resolve that would be to ensure tasks that do reconfigure more than once are single-env only / cpu sim only
