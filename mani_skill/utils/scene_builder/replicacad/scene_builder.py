@@ -72,6 +72,7 @@ class ReplicaCADSceneBuilder(SceneBuilder):
         # note that we will create a merged actor using these objects to represent the bg
         bgs = [None] * self.env.num_envs
 
+        print("rcad bcis", build_config_idxs, flush=True)
         for bci in np.unique(build_config_idxs):
             """
             Given a list of sampled build_config_idxs, build/load the scene objects
@@ -83,6 +84,8 @@ class ReplicaCADSceneBuilder(SceneBuilder):
             env_idx = [i for i, v in enumerate(build_config_idxs) if v == bci]
             unique_id = "scs-" + str(env_idx).replace(" ", "")
             build_cfg_path = self.build_configs[bci]
+
+            print(f"rcad bci={bci} env_idx={env_idx}", flush=True)
 
             # We read the json config file describing the scene setup for the selected ReplicaCAD scene
             with open(

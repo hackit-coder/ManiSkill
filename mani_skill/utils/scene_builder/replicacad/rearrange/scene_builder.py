@@ -91,6 +91,9 @@ class ReplicaCADRearrangeSceneBuilder(ReplicaCADSceneBuilder):
         self.before_hide_collision_groups: Dict[str, List[int]] = dict()
 
     def build(self, build_config_idxs: List[int]):
+
+        print("start rearrange build", flush=True)
+
         assert all(
             [bci in self.used_build_config_idxs for bci in build_config_idxs]
         ), f"got one or more unused build_config_idxs in {build_config_idxs}; This RCAD Rearrange task only uses the following build_config_idxs: {self.used_build_config_idxs}"
@@ -183,6 +186,8 @@ class ReplicaCADRearrangeSceneBuilder(ReplicaCADSceneBuilder):
             for bci in build_config_idxs
         ]
 
+        print("building rearrange ycb objs...", flush=True)
+
         # find max number of each ycb obj needed to support all init configs in each parallel env
         self.ycb_objs_per_env = []
         for env_num, bci in enumerate(build_config_idxs):
@@ -201,6 +206,8 @@ class ReplicaCADRearrangeSceneBuilder(ReplicaCADSceneBuilder):
                     self.scene_objects[obj_instance_name] = actor
                     self.movable_objects[obj_instance_name] = actor
             self.ycb_objs_per_env.append(ycb_objs)
+
+        print("done rearrange build", flush=True)
 
     def initialize(self, env_idx: torch.Tensor, init_config_idxs: List[int]):
         assert all(
