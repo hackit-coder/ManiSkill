@@ -290,7 +290,7 @@ class SequentialTaskEnv(SceneManipulationEnv):
         #   value that was 1 too large, then they wouldn't know)
         self.build_config_idxs = np.repeat(
             sorted(list(self.build_config_idx_to_task_plans.keys())),
-            np.ceil(self.num_envs / num_bcis) * num_bcis,
+            np.ceil(self.num_envs / num_bcis),
         )[: self.num_envs].tolist()
         self.num_task_plans_per_bci = torch.tensor(
             [
