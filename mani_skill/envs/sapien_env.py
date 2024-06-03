@@ -149,7 +149,7 @@ class BaseEnv(gym.Env):
         sim_backend: str = "auto",
     ):
         
-        print(0, flush=True)
+        print("0", flush=True)
 
         self.num_envs = num_envs
         self.reconfiguration_freq = reconfiguration_freq if reconfiguration_freq is not None else 0
@@ -161,13 +161,13 @@ class BaseEnv(gym.Env):
             if robot_uids not in self.SUPPORTED_ROBOTS:
                 logger.warn(f"{robot_uids} is not in the task's list of supported robots. Code may not run as intended")
 
-        print(1, flush=True)
+        print("1", flush=True)
 
         if physx.is_gpu_enabled() and num_envs == 1 and (sim_backend == "auto" or sim_backend == "cpu"):
             logger.warn("GPU simulation has already been enabled on this process, switching to GPU backend")
             sim_backend == "gpu"
 
-        print(2, flush=True)
+        print("2", flush=True)
 
         if num_envs > 1 or sim_backend == "gpu":
             if not physx.is_gpu_enabled():
@@ -178,7 +178,7 @@ class BaseEnv(gym.Env):
         else:
             self.device = torch.device("cpu")
         
-        print(3, flush=True)
+        print('3', flush=True)
 
         # raise a number of nicer errors
         if sim_backend == "cpu" and num_envs > 1:
@@ -192,7 +192,7 @@ class BaseEnv(gym.Env):
             if num_envs > 1:
                 raise RuntimeError("""Currently you cannot run ray-tracing on more than one environment in a single process""")
             
-        print(4, flush=True)
+        print('4', flush=True)
 
         # TODO (stao): move the merge code / handling union typed arguments outside here so classes inheriting BaseEnv only get
         # the already parsed sim config argument
@@ -231,7 +231,7 @@ class BaseEnv(gym.Env):
             sapien.render.set_ray_tracing_denoiser("optix")
         sapien.render.set_log_level(os.getenv("MS_RENDERER_LOG_LEVEL", "warn"))
 
-        print(5, flush=True)
+        print('5', flush=True)
 
         # Set simulation and control frequency
         self._sim_freq = self.sim_cfg.sim_freq
@@ -269,7 +269,7 @@ class BaseEnv(gym.Env):
         # Lighting
         self.enable_shadow = enable_shadow
 
-        print(6, flush=True)
+        print('6', flush=True)
 
         # Use a fixed (main) seed to enhance determinism
         self._main_seed = None
@@ -278,11 +278,11 @@ class BaseEnv(gym.Env):
             torch.zeros(self.num_envs, device=self.device, dtype=torch.int32)
         )
 
-        print(7, flush=True)
+        print('7', flush=True)
 
         obs, _ = self.reset(seed=2022, options=dict(reconfigure=True))
 
-        print(8, flush=True)
+        print('8', flush=True)
 
         self._init_raw_obs = common.to_cpu_tensor(obs)
         """the raw observation returned by the env.reset (a cpu torch tensor/dict of tensors). Useful for future observation wrappers to use to auto generate observation spaces"""
@@ -296,7 +296,7 @@ class BaseEnv(gym.Env):
         self.single_observation_space
         self.observation_space
 
-        print(9, flush=True)
+        print('9', flush=True)
 
     def update_obs_space(self, obs: torch.Tensor):
         """call this function if you modify the observations returned by env.step and env.reset via an observation wrapper."""
