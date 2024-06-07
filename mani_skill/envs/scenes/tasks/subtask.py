@@ -1,19 +1,15 @@
 from .sequential_task import SequentialTaskEnv
 from .planner import TaskPlan, Subtask
 
-import mani_skill.envs.utils.randomization as randomization
-from mani_skill.utils.registration import register_env
 from mani_skill.utils.structs import Pose
-from mani_skill.utils.geometry.rotation_conversions import quaternion_raw_multiply
 import sapien.physx as physx
 
 import torch
 from torch.nn.utils.rnn import pad_sequence
 
-from typing import Any, Dict, List
+from typing import List
 
 
-@register_env("SubtaskTrain-v0", max_episode_steps=200)
 class SubtaskTrainEnv(SequentialTaskEnv):
     """
     Task Description
@@ -66,6 +62,11 @@ class SubtaskTrainEnv(SequentialTaskEnv):
 
         # additional target obj randomization
         self.target_randomization = target_randomization
+
+        self.subtask_cfg = getattr(self, "subtask_cfg", None)
+        assert (
+            self.subtask_cfg is not None
+        ), "Need to designate self.subtask_config (in extending env)"
 
         super().__init__(*args, robot_uids=robot_uids, task_plans=task_plans, **kwargs)
 
@@ -177,7 +178,7 @@ class SubtaskTrainEnv(SequentialTaskEnv):
                         torch.normal(0, 0.25, qpos[env_idx, 2:3].shape), -0.5, 0.5
                     ).to(self.device)
                 if self.randomize_arm:
-                    rrqd = self.pick_cfg.robot_init_qpos_noise
+                    rrqd = self.subtask_cfg.robot_init_qpos_noise
                     qpos[env_idx, 5:6] += torch.clamp(
                         torch.normal(0, rrqd / 2, qpos[env_idx, 5:6].shape), -rrqd, rrqd
                     ).to(self.device)

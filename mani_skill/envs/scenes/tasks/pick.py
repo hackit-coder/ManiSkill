@@ -60,6 +60,8 @@ class PickSubtaskTrainEnv(SubtaskTrainEnv):
             tp0.subtasks[0], PickSubtask
         ), f"Task plans for {self.__class__.__name__} must be one {PickSubtask.__name__} long"
 
+        self.subtask_cfg = self.pick_cfg
+
         super().__init__(*args, robot_uids=robot_uids, task_plans=task_plans, **kwargs)
 
     # -------------------------------------------------------------------------------------------------
