@@ -13,6 +13,7 @@ import numpy as np
 import sapien
 import torch
 import transforms3d
+import trimesh
 
 from mani_skill import ASSET_DIR
 from mani_skill.agents.robots.fetch import (
@@ -251,16 +252,16 @@ class ReplicaCADSceneBuilder(SceneBuilder):
             self.scene.set_ambient_light([0.3, 0.3, 0.3])
 
             if self._navigable_positions[bci] is None:
-                npy_fp = (
+                mesh_fp = (
                     Path(ASSET_DIR)
                     / "scene_datasets/replica_cad_dataset/configs/scenes"
                     / (
                         Path(self.build_configs[bci]).stem
-                        + f".{str(self.env.robot_uids)}.navigable_positions.npy"
+                        + f".{str(self.env.robot_uids)}.navigable_positions.obj"
                     )
                 )
-                if npy_fp.exists():
-                    self._navigable_positions[bci] = np.load(npy_fp)
+                if mesh_fp.exists():
+                    self._navigable_positions[bci] = trimesh.load(mesh_fp)
 
         # merge actors into one
         self.bg = Actor.create_from_entities(
@@ -303,5 +304,5 @@ class ReplicaCADSceneBuilder(SceneBuilder):
             )
 
     @property
-    def navigable_positions(self) -> List[np.ndarray]:
+    def navigable_positions(self) -> List[trimesh.Trimesh]:
         return [self._navigable_positions[bci] for bci in self.build_config_idxs]

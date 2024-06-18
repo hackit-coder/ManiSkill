@@ -6,6 +6,7 @@ import sapien.physx as physx
 
 import torch
 from torch.nn.utils.rnn import pad_sequence
+import trimesh
 
 from typing import List
 
@@ -110,9 +111,12 @@ class SubtaskTrainEnv(SequentialTaskEnv):
                 centers = self.subtask_objs[0].pose.p[env_idx, :2]
                 navigable_positions = []
                 for env_num, center in zip(env_idx, centers):
-                    positions = torch.tensor(
-                        self.scene_builder.navigable_positions[env_num]
-                    )
+                    env_navigable_positions = self.scene_builder.navigable_positions[
+                        env_num
+                    ]
+                    if isinstance(env_navigable_positions, trimesh.Trimesh):
+                        env_navigable_positions = env_navigable_positions.vertices
+                    positions = torch.tensor(env_navigable_positions)
                     navigable_positions.append(
                         positions[
                             torch.norm(positions - center, dim=1)

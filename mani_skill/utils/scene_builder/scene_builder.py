@@ -5,6 +5,7 @@ from functools import cached_property
 
 import torch
 from gymnasium import spaces
+import trimesh
 
 if TYPE_CHECKING:
     from mani_skill.envs.sapien_env import BaseEnv
@@ -36,7 +37,9 @@ class SceneBuilder:
     articulations: Optional[Dict[str, Articulation]] = None
     """Articulations are any articulation loaded in by the scene builder."""
 
-    navigable_positions: Optional[List[Union[Array, spaces.Box]]] = None
+    navigable_positions: Optional[List[Union[Array, spaces.Box, trimesh.Trimesh]]] = (
+        None
+    )
     """Some scenes allow for mobile robots to move through these scene. In this case, a list of navigable positions per env_idx (e.g. loaded from a navmesh) should be provided for easy initialization. Can be a discretized list, range, spaces.Box, etc."""
 
     def __init__(self, env, robot_init_qpos_noise=0.02):

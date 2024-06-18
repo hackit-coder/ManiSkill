@@ -92,6 +92,10 @@ class SceneManipulationEnv(BaseEnv):
             self.init_config_idxs = options.pop(
                 "init_config_idxs", self.init_config_idxs
             )
+        if isinstance(self.build_config_idxs, int):
+            self.build_config_idxs = [self.build_config_idxs]
+        if isinstance(self.init_config_idxs, int):
+            self.init_config_idxs = [self.init_config_idxs]
         return super().reset(seed, options)
 
     def _load_lighting(self, options: dict):
