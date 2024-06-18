@@ -197,24 +197,7 @@ class SubtaskTrainEnv(SequentialTaskEnv):
                 robot_init_q[env_idx] = self.agent.robot.pose.q[env_idx].clone()
                 robot_init_qpos[env_idx] = self.agent.robot.qpos[env_idx].clone()
 
-                if physx.is_gpu_enabled():
-                    self.scene._gpu_apply_all()
-                    self.scene.px.gpu_update_articulation_kinematics()
-                    self.scene._gpu_fetch_all()
-                self.scene.step()
-
-                if physx.is_gpu_enabled():
-                    robot_force = (
-                        self.agent.robot.get_net_contact_forces(
-                            self.force_articulation_link_ids
-                        )
-                        .norm(dim=-1)
-                        .sum(dim=-1)
-                    )
-                else:
-                    robot_force = self.agent.robot.get_net_contact_forces(
-                        self.force_articulation_link_ids
-                    ).norm(dim=-1)
+                env_idx = self._get_failed_init_env_idx()
 
                 self.scene_builder.initialize(original_env_idx, self.init_config_idxs)
                 self.agent.reset(robot_init_qpos)
@@ -222,10 +205,13 @@ class SubtaskTrainEnv(SequentialTaskEnv):
                     Pose.create_from_pq(p=robot_init_p, q=robot_init_q)
                 )
 
-                if torch.all((robot_force < 1e-3)[env_idx]):
+                if env_idx.numel() == 0:
                     break
 
-                env_idx = torch.where(robot_force >= 1e-3)[0]
+    def _get_failed_init_env_idx(self) -> torch.Tensor:
+        raise NotImplementedError(
+            "This should be implemented by extending class (e.g. PickSubtaskTrainEnv)"
+        )
 
     # -------------------------------------------------------------------------------------------------
 

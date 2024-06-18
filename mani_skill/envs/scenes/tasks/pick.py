@@ -1,6 +1,7 @@
 from typing import Any, Dict, List
 
 import torch
+import sapien.physx as physx
 
 from mani_skill.envs.utils import randomization
 from mani_skill.utils.geometry.rotation_conversions import quaternion_raw_multiply
@@ -34,6 +35,7 @@ class PickSubtaskTrainEnv(SubtaskTrainEnv):
     pick_cfg = PickSubtaskConfig(
         horizon=200,
         ee_rest_thresh=0.05,
+        robot_init_qpos_noise=0.2,
     )
 
     def __init__(
@@ -78,6 +80,21 @@ class PickSubtaskTrainEnv(SubtaskTrainEnv):
                 self.subtask_objs[0].set_pose(Pose.create_from_pq(xyz, qs))
 
             super()._initialize_episode(env_idx, options)
+
+    def _get_failed_init_env_idx(self) -> torch.Tensor:
+        if physx.is_gpu_enabled():
+            self.scene._gpu_apply_all()
+            self.scene.px.gpu_update_articulation_kinematics()
+            self.scene._gpu_fetch_all()
+        self.scene.step()
+
+        robot_force = self.agent.robot.get_net_contact_forces(
+            self.force_articulation_link_ids
+        ).norm(dim=-1)
+        if physx.is_gpu_enabled():
+            robot_force = robot_force.sum(dim=-1)
+
+        return torch.where(robot_force >= 1e-3)[0]
 
     # -------------------------------------------------------------------------------------------------
 
