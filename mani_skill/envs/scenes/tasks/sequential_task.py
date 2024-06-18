@@ -30,6 +30,7 @@ from .planner import (
 )
 
 UNIQUE_SUCCESS_SUBTASK_TYPE = 100_000
+HIDDEN_POSITION = [99999, 99999, 99999]
 
 
 def all_equal(array: list):
@@ -118,6 +119,9 @@ class SequentialTaskEnv(SceneManipulationEnv):
         self.base_task_plans: Dict[str, List[TaskPlan]] = defaultdict(list)
         for tp in task_plans:
             self.base_task_plans[tp.build_config_name].append(tp)
+
+        self.seq_task_len = len(task_plans[0].subtasks)
+
         super().__init__(*args, robot_uids=robot_uids, **kwargs)
 
     # -------------------------------------------------------------------------------------------------
@@ -143,6 +147,10 @@ class SequentialTaskEnv(SceneManipulationEnv):
                         parallel_subtasks, name=merged_obj_name
                     )
                 )
+
+                self.premade_place_goal_list[subtask_num].set_pose(
+                    sapien.Pose(p=HIDDEN_POSITION)
+                )
                 self.subtask_goals.append(None)
 
                 self.task_plan.append(PickSubtask(obj_id=merged_obj_name))
@@ -150,7 +158,6 @@ class SequentialTaskEnv(SceneManipulationEnv):
             elif isinstance(subtask0, PlaceSubtask):
                 parallel_subtasks: List[PlaceSubtask]
                 merged_obj_name = f"obj_{subtask_num}"
-                merged_goal_name = f"goal_{subtask_num}"
                 self.subtask_objs.append(
                     self._create_merged_actor_from_subtasks(
                         parallel_subtasks, name=merged_obj_name
@@ -158,13 +165,10 @@ class SequentialTaskEnv(SceneManipulationEnv):
                 )
 
                 goal_pos = [list(subtask.goal_pos) for subtask in parallel_subtasks]
-                self.subtask_goals.append(
-                    self._make_goal(
-                        radius=self.place_cfg.obj_goal_thresh,
-                        name=merged_goal_name,
-                        pos=goal_pos,
-                    )
+                self.premade_place_goal_list[subtask_num].set_pose(
+                    Pose.create_from_pq(p=torch.tensor(goal_pos))
                 )
+                self.subtask_goals.append(self.premade_place_goal_list[subtask_num])
 
                 self.task_plan.append(
                     PlaceSubtask(
@@ -174,14 +178,17 @@ class SequentialTaskEnv(SceneManipulationEnv):
                 )
 
             elif isinstance(subtask0, NavigateSubtask):
+                self.premade_place_goal_list[subtask_num].set_pose(
+                    sapien.Pose(p=HIDDEN_POSITION)
+                )
+                self.subtask_goals.append(None)
+
                 if isinstance(last_subtask0, PickSubtask):
                     last_subtask_obj = self.subtask_objs[-1]
                     self.subtask_objs.append(last_subtask_obj)
-                    self.subtask_goals.append(None)
                     self.task_plan.append(NavigateSubtask(obj_id=last_subtask_obj.name))
                 else:
                     self.subtask_objs.append(None)
-                    self.subtask_goals.append(None)
                     self.task_plan.append(NavigateSubtask())
 
             else:
@@ -261,7 +268,7 @@ class SequentialTaskEnv(SceneManipulationEnv):
         return goal
 
     @property
-    def ee_rest_world_pose(self):
+    def ee_rest_world_pose(self) -> Pose:
         return self.agent.base_link.pose * self.ee_rest_pos_wrt_base
 
     # -------------------------------------------------------------------------------------------------
@@ -271,6 +278,14 @@ class SequentialTaskEnv(SceneManipulationEnv):
     # -------------------------------------------------------------------------------------------------
 
     def _load_scene(self, options):
+        self.premade_place_goal_list: List[Actor] = [
+            self._make_goal(
+                radius=self.place_cfg.obj_goal_thresh,
+                name=f"goal_{subtask_num}",
+            )
+            for subtask_num in range(self.seq_task_len)
+        ]
+
         self.build_config_idx_to_task_plans: Dict[int, List[TaskPlan]] = dict()
         for bc in self.base_task_plans.keys():
             self.build_config_idx_to_task_plans[
@@ -296,8 +311,9 @@ class SequentialTaskEnv(SceneManipulationEnv):
             [
                 len(self.build_config_idx_to_task_plans[bci])
                 for bci in self.build_config_idxs
-            ]
-        ).to(self.device)
+            ],
+            device=self.device,
+        )
         super()._load_scene(options)
         self.ee_rest_pos_wrt_base = Pose.create_from_pq(
             p=self.EE_REST_POS_WRT_BASE, device=self.device
@@ -314,35 +330,36 @@ class SequentialTaskEnv(SceneManipulationEnv):
         )
 
     def _initialize_episode(self, env_idx: torch.Tensor, options):
-        self.task_plan_idxs = options.pop("task_plan_idxs", None)
-        if self.task_plan_idxs is None:
-            low = torch.zeros(len(self.build_config_idxs))
-            high = self.num_task_plans_per_bci
-            size = (len(self.build_config_idxs),)
-            self.task_plan_idxs: List[int] = (
-                (torch.randint(2**63 - 1, size=size) % (high - low) + low)
-                .int()
-                .tolist()
+        with torch.device(self.device):
+            self.task_plan_idxs = options.pop("task_plan_idxs", None)
+            if self.task_plan_idxs is None:
+                low = torch.zeros(len(self.build_config_idxs))
+                high = self.num_task_plans_per_bci
+                size = (len(self.build_config_idxs),)
+                self.task_plan_idxs: List[int] = (
+                    (torch.randint(2**63 - 1, size=size) % (high - low) + low)
+                    .int()
+                    .tolist()
+                )
+            sampled_task_plans = [
+                self.build_config_idx_to_task_plans[bci][tpi]
+                for bci, tpi in zip(self.build_config_idxs, self.task_plan_idxs)
+            ]
+            self.init_config_idxs = [
+                self.scene_builder.init_config_names_to_idxs[tp.init_config_name]
+                for tp in sampled_task_plans
+            ]
+            super()._initialize_episode(env_idx, options)
+            self.process_task_plan(
+                sampled_subtask_lists=[tp.subtasks for tp in sampled_task_plans]
             )
-        sampled_task_plans = [
-            self.build_config_idx_to_task_plans[bci][tpi]
-            for bci, tpi in zip(self.build_config_idxs, self.task_plan_idxs)
-        ]
-        self.init_config_idxs = [
-            self.scene_builder.init_config_names_to_idxs[tp.init_config_name]
-            for tp in sampled_task_plans
-        ]
-        super()._initialize_episode(env_idx, options)
-        self.process_task_plan(
-            sampled_subtask_lists=[tp.subtasks for tp in sampled_task_plans]
-        )
 
-        self.subtask_pointer[env_idx] = 0
-        self.subtask_steps_left[env_idx] = self.task_cfgs[
-            self.task_plan[0].type
-        ].horizon
+            self.subtask_pointer[env_idx] = 0
+            self.subtask_steps_left[env_idx] = self.task_cfgs[
+                self.task_plan[0].type
+            ].horizon
 
-        self.resting_qpos = torch.tensor(self.agent.keyframes["rest"].qpos[3:-2])
+            self.resting_qpos = torch.tensor(self.agent.keyframes["rest"].qpos[3:-2])
 
     # -------------------------------------------------------------------------------------------------
 
@@ -685,11 +702,31 @@ class SequentialTaskEnv(SceneManipulationEnv):
 
     @property
     def _default_human_render_camera_configs(self):
-        # # top-down camera (good for spawn generation vids)
-        # room_camera_pose = look_at([0, 0, 12], [0, 0, 0])
+        # room_camera_pose = sapien_utils.look_at(
+        #     [2, -0.8, 1.75], [-1.9, -1, 0]
+        # )  # fov 1.75
+        # room_camera_pose = sapien_utils.look_at(
+        #     [-0.3, 0, 2], [1.5, -4.46, 1]
+        # )  # fov 1.5
+        # room_camera_pose = sapien_utils.look_at(
+        #     [1.5, -2.4, 2], [0.5, -3.7, 1.5]
+        # )  # fov 1.75
+        # room_camera_pose = sapien_utils.look_at(
+        #     [-1, -0.5, 3], [0.4, -5.4, 0.4]
+        # )  # fov 1.3
+        # # room_camera_pose = sapien_utils.look_at(
+        # #     [-1.5, -2.5, 3], [-0.6, -1.8, 0]
+        # # )  # fov 1.75
         # room_camera_config = CameraConfig(
-        #     "render_camera", room_camera_pose.p, room_camera_pose.q, 512, 512, 1, 0.01, 20
+        #     "render_camera",
+        #     room_camera_pose,
+        #     1024,
+        #     1024,
+        #     1.3,
+        #     0.01,
+        #     10,
         # )
+
         # return room_camera_config
 
         # this camera follows the robot around (though might be in walls if the space is cramped)

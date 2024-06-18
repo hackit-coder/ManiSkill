@@ -15,15 +15,6 @@ from .planner import (
 from .subtask import SubtaskTrainEnv
 
 
-PICK_OBS_EXTRA_KEYS = set(
-    [
-        "tcp_pose_wrt_base",
-        "obj_pose_wrt_base",
-        "is_grasped",
-    ]
-)
-
-
 @register_env("PickSubtaskTrain-v0", max_episode_steps=200)
 class PickSubtaskTrainEnv(SubtaskTrainEnv):
     """
@@ -44,8 +35,6 @@ class PickSubtaskTrainEnv(SubtaskTrainEnv):
         horizon=200,
         ee_rest_thresh=0.05,
     )
-    place_cfg = None
-    navigate_cfg = None
 
     def __init__(
         self,
@@ -89,24 +78,6 @@ class PickSubtaskTrainEnv(SubtaskTrainEnv):
                 self.subtask_objs[0].set_pose(Pose.create_from_pq(xyz, qs))
 
             super()._initialize_episode(env_idx, options)
-
-    # -------------------------------------------------------------------------------------------------
-
-    # -------------------------------------------------------------------------------------------------
-    # OBS AND INFO
-    # -------------------------------------------------------------------------------------------------
-    # Remove irrelevant obs for pick task from state dict
-    # -------------------------------------------------------------------------------------------------
-
-    def _get_obs_state_dict(self, info: Dict):
-        state_dict = super()._get_obs_state_dict(info)
-
-        state_dict_extra = dict()
-        for key in PICK_OBS_EXTRA_KEYS:
-            state_dict_extra[key] = state_dict["extra"][key]
-        state_dict["extra"] = state_dict_extra
-
-        return state_dict
 
     # -------------------------------------------------------------------------------------------------
 
