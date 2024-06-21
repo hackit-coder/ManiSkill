@@ -164,7 +164,29 @@ class SequentialTaskEnv(SceneManipulationEnv):
                     )
                 )
 
-                goal_pos = [list(subtask.goal_pos) for subtask in parallel_subtasks]
+                Bs, BCs, BAs = [], [], []
+                for subtask in parallel_subtasks:
+                    grcs = np.array(
+                        subtask.goal_rectangle_corners
+                        if subtask.goal_rectangle_probs is None
+                        else self.np_random.choice(
+                            subtask.goal_rectangle_corners,
+                            p=subtask.goal_rectangle_probs,
+                        )
+                    )
+                    grcs[..., 2] += self.place_cfg.obj_goal_thresh * 2 / 3
+                    Bs.append(grcs[1])
+                    BCs.append(grcs[2] - grcs[1])
+                    BAs.append(grcs[0] - grcs[1])
+                Bs, BCs, BAs = np.array(Bs), np.array(BCs), np.array(BAs)
+
+                u, v = self.np_random.uniform(
+                    low=0, high=1, size=(len(parallel_subtasks), 1)
+                ), self.np_random.uniform(
+                    low=0, high=1, size=(len(parallel_subtasks), 1)
+                )
+
+                goal_pos = ((BCs * u + BAs * v) + Bs).tolist()
                 self.premade_place_goal_list[subtask_num].set_pose(
                     Pose.create_from_pq(p=torch.tensor(goal_pos))
                 )
@@ -714,15 +736,16 @@ class SequentialTaskEnv(SceneManipulationEnv):
         # room_camera_pose = sapien_utils.look_at(
         #     [-1, -0.5, 3], [0.4, -5.4, 0.4]
         # )  # fov 1.3
-        # # room_camera_pose = sapien_utils.look_at(
-        # #     [-1.5, -2.5, 3], [-0.6, -1.8, 0]
-        # # )  # fov 1.75
+        # room_camera_pose = sapien_utils.look_at(
+        #     [-1.5, -2.5, 3], [-0.6, -1.8, 0]
+        # )  # fov 1.75
+        # room_camera_pose = sapien_utils.look_at([3.7, 1, 3], [0, -3, 0])  # fov 1.75
         # room_camera_config = CameraConfig(
         #     "render_camera",
         #     room_camera_pose,
-        #     1024,
-        #     1024,
-        #     1.3,
+        #     512,
+        #     512,
+        #     1.75,
         #     0.01,
         #     10,
         # )

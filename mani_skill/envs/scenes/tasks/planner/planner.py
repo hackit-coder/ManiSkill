@@ -10,6 +10,11 @@ import shortuuid
 Task Planner Dataclasses
 """
 
+PointTuple = Union[Tuple[float, float, float], List[float]]
+RectCorners = Union[
+    Tuple[PointTuple, PointTuple, PointTuple, PointTuple], List[PointTuple]
+]
+
 
 @dataclass
 class Subtask:
@@ -52,13 +57,41 @@ class PickSubtaskConfig(SubtaskConfig):
 @dataclass
 class PlaceSubtask(Subtask):
     obj_id: str
-    goal_pos: Union[str, Tuple[float, float, float], List[Tuple[float, float, float]]]
+    goal_rectangle_corners: Union[List[str], RectCorners, List[RectCorners], None] = (
+        None
+    )
+    goal_rectangle_probs: Union[List[float], None] = None
+    goal_pos: Union[PointTuple, None] = None
 
     def __post_init__(self):
         self.type = "place"
         super().__post_init__()
+        if self.goal_rectangle_corners is not None:
+            if self.goal_rectangle_probs is None:
+                self.goal_rectangle_corners = self._parse_rect_corners(
+                    self.goal_rectangle_corners
+                )
+            else:
+                assert len(self.goal_rectangle_corners) == len(
+                    self.goal_rectangle_probs
+                )
+                assert abs(sum(self.goal_rectangle_probs) - 1) <= 1e-3
+                self.goal_rectangle_corners = [
+                    self._parse_rect_corners(grc) for grc in self.goal_rectangle_corners
+                ]
+
         if isinstance(self.goal_pos, str):
             self.goal_pos = [float(coord) for coord in self.goal_pos.split(",")]
+
+    def _parse_rect_corners(self, rect_corners):
+        for i, corner in enumerate(rect_corners):
+            if isinstance(corner, str):
+                rect_corners[i] = [float(coord) for coord in corner.split(",")]
+        # make sure have exactly 4 corners at the same height
+        assert len(rect_corners) == 4, "Goal rectangle must have exactly 4 corners"
+        # assuming a rectangle, this should always place in ABCD order
+        cs = sorted(rect_corners)
+        return [cs[0], cs[1], cs[3], cs[2]]
 
 
 @dataclass
@@ -74,9 +107,7 @@ class PlaceSubtaskConfig(SubtaskConfig):
 @dataclass
 class NavigateSubtask(Subtask):
     obj_id: Union[str, None] = None
-    goal_pos: Union[
-        str, Tuple[float, float, float], List[Tuple[float, float, float]], None
-    ] = None
+    goal_pos: Union[PointTuple, None] = None
 
     def __post_init__(self):
         self.type = "navigate"
