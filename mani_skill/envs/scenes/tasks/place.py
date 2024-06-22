@@ -99,7 +99,6 @@ class PlaceSubtaskTrainEnv(SubtaskTrainEnv):
         super().process_task_plan(sampled_subtask_lists)
 
     def _initialize_episode(self, env_idx, options):
-        print()
         with torch.device(self.device):
             original_env_idx = env_idx.clone()
             init_success = torch.zeros(self.num_envs, dtype=torch.bool)
@@ -114,7 +113,6 @@ class PlaceSubtaskTrainEnv(SubtaskTrainEnv):
             )
             # keep going until no collisions
             while True:
-                print(env_idx)
 
                 centers = self.subtask_goals[0].pose.p[env_idx, :2]
                 navigable_positions = []
