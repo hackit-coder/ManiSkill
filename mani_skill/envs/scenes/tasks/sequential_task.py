@@ -726,26 +726,26 @@ class SequentialTaskEnv(SceneManipulationEnv):
     def _default_human_render_camera_configs(self):
         # room_camera_pose = sapien_utils.look_at(
         #     [2, -0.8, 1.75], [-1.9, -1, 0]
-        # )  # fov 1.75
+        # ); fov=1.75
         # room_camera_pose = sapien_utils.look_at(
         #     [-0.3, 0, 2], [1.5, -4.46, 1]
-        # )  # fov 1.5
+        # ); fov=1.5
         # room_camera_pose = sapien_utils.look_at(
         #     [1.5, -2.4, 2], [0.5, -3.7, 1.5]
-        # )  # fov 1.75
+        # ); fov=1.75
         # room_camera_pose = sapien_utils.look_at(
         #     [-1, -0.5, 3], [0.4, -5.4, 0.4]
-        # )  # fov 1.3
+        # ); fov=1.3
         # room_camera_pose = sapien_utils.look_at(
         #     [-1.5, -2.5, 3], [-0.6, -1.8, 0]
-        # )  # fov 1.75
-        # room_camera_pose = sapien_utils.look_at([3.7, 1, 3], [0, -3, 0])  # fov 1.75
+        # ); fov=1.75
+        # room_camera_pose = sapien_utils.look_at([3.7, 1, 3], [0, -3, 0]); fov=1.75
         # room_camera_config = CameraConfig(
         #     "render_camera",
         #     room_camera_pose,
         #     512,
         #     512,
-        #     1.75,
+        #     fov,
         #     0.01,
         #     10,
         # )

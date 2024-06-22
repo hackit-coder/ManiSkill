@@ -1,14 +1,9 @@
-from .sequential_task import SequentialTaskEnv
-from .planner import TaskPlan, Subtask
-
-from mani_skill.utils.structs import Pose
-import sapien.physx as physx
+from typing import List
 
 import torch
-from torch.nn.utils.rnn import pad_sequence
-import trimesh
 
-from typing import List
+from .sequential_task import SequentialTaskEnv
+from .planner import TaskPlan, Subtask
 
 
 class SubtaskTrainEnv(SequentialTaskEnv):
@@ -80,7 +75,7 @@ class SubtaskTrainEnv(SequentialTaskEnv):
         return super().reset(*args, **kwargs)
 
     # -------------------------------------------------------------------------------------------------
-    # INIT ROBOT SPAWN RANDOMIZATION
+    # FORCE TRACKING RECONFIGURE
     # -------------------------------------------------------------------------------------------------
 
     def _after_reconfigure(self, options):
@@ -93,125 +88,6 @@ class SubtaskTrainEnv(SequentialTaskEnv):
             for link in self.agent.robot.get_links()
             if link not in force_rew_ignore_links
         ]
-
-    def _initialize_episode(self, env_idx, options):
-        with torch.device(self.device):
-            original_env_idx = env_idx.clone()
-
-            super()._initialize_episode(env_idx, options)
-
-            robot_init_p, robot_init_q, robot_init_qpos = (
-                self.agent.robot.pose.p.clone(),
-                self.agent.robot.pose.q.clone(),
-                self.agent.robot.qpos.clone(),
-            )
-            # keep going until no collisions
-            while True:
-
-                centers = self.subtask_objs[0].pose.p[env_idx, :2]
-                navigable_positions = []
-                for env_num, center in zip(env_idx, centers):
-                    env_navigable_positions = self.scene_builder.navigable_positions[
-                        env_num
-                    ]
-                    if isinstance(env_navigable_positions, trimesh.Trimesh):
-                        env_navigable_positions = env_navigable_positions.vertices
-                    positions = torch.tensor(env_navigable_positions)
-                    navigable_positions.append(
-                        positions[
-                            torch.norm(positions - center, dim=1)
-                            <= self.spawn_loc_radius
-                        ]
-                    )
-                num_navigable_positions = torch.tensor(
-                    [len(positions) for positions in navigable_positions]
-                ).int()
-                navigable_positions = pad_sequence(
-                    navigable_positions, batch_first=True, padding_value=0
-                ).float()
-
-                positions_wrt_centers = navigable_positions - centers.unsqueeze(1)
-                dists = torch.norm(positions_wrt_centers, dim=-1)
-
-                rots = (
-                    torch.sign(positions_wrt_centers[..., 1])
-                    * torch.arccos(positions_wrt_centers[..., 0] / dists)
-                    + torch.pi
-                )
-                rots %= 2 * torch.pi
-
-                # NOTE (arth): it is assumed that scene builder spawns agent with some qpos
-                qpos = self.agent.robot.get_qpos()
-
-                if self.randomize_loc:
-                    low = torch.zeros_like(num_navigable_positions)
-                    high = num_navigable_positions
-                    size = env_idx.size()
-                    idxs: List[int] = (
-                        (torch.randint(2**63 - 1, size=size) % (high - low) + low)
-                        .int()
-                        .tolist()
-                    )
-                    locs = torch.stack(
-                        [
-                            positions[i]
-                            for positions, i in zip(navigable_positions, idxs)
-                        ],
-                        dim=0,
-                    )
-                    rots = torch.stack(
-                        [rot[i] for rot, i in zip(rots, idxs)],
-                        dim=0,
-                    )
-                else:
-                    raise NotImplementedError()
-                robot_pos = self.agent.robot.pose.p
-                robot_pos[env_idx, :2] = locs
-                self.agent.robot.set_pose(Pose.create_from_pq(p=robot_pos))
-
-                qpos[env_idx, 2] = rots
-                if self.randomize_base:
-                    # base pos
-                    robot_pos = self.agent.robot.pose.p
-                    robot_pos[env_idx, :2] += torch.clamp(
-                        torch.normal(0, 0.1, robot_pos[env_idx, :2].shape), -0.2, 0.2
-                    ).to(self.device)
-                    self.agent.robot.set_pose(Pose.create_from_pq(p=robot_pos))
-                    # base rot
-                    qpos[env_idx, 2:3] += torch.clamp(
-                        torch.normal(0, 0.25, qpos[env_idx, 2:3].shape), -0.5, 0.5
-                    ).to(self.device)
-                if self.randomize_arm:
-                    rrqd = self.subtask_cfg.robot_init_qpos_noise
-                    qpos[env_idx, 5:6] += torch.clamp(
-                        torch.normal(0, rrqd / 2, qpos[env_idx, 5:6].shape), -rrqd, rrqd
-                    ).to(self.device)
-                    qpos[env_idx, 7:-2] += torch.clamp(
-                        torch.normal(0, rrqd / 2, qpos[env_idx, 7:-2].shape),
-                        -rrqd,
-                        rrqd,
-                    ).to(self.device)
-                self.agent.reset(qpos)
-
-                robot_init_p[env_idx] = self.agent.robot.pose.p[env_idx].clone()
-                robot_init_q[env_idx] = self.agent.robot.pose.q[env_idx].clone()
-                robot_init_qpos[env_idx] = self.agent.robot.qpos[env_idx].clone()
-
-                env_idx = self._get_failed_init_env_idx()
-
-                self.scene_builder.initialize(original_env_idx, self.init_config_idxs)
-                self.agent.reset(robot_init_qpos)
-                self.agent.robot.set_pose(
-                    Pose.create_from_pq(p=robot_init_p, q=robot_init_q)
-                )
-
-                if env_idx.numel() == 0:
-                    break
-
-    def _get_failed_init_env_idx(self) -> torch.Tensor:
-        raise NotImplementedError(
-            "This should be implemented by extending class (e.g. PickSubtaskTrainEnv)"
-        )
 
     # -------------------------------------------------------------------------------------------------
 
