@@ -300,13 +300,14 @@ class SequentialTaskEnv(SceneManipulationEnv):
     # -------------------------------------------------------------------------------------------------
 
     def _load_scene(self, options):
-        self.premade_place_goal_list: List[Actor] = [
-            self._make_goal(
-                radius=self.place_cfg.obj_goal_thresh,
-                name=f"goal_{subtask_num}",
-            )
-            for subtask_num in range(self.seq_task_len)
-        ]
+        if self.place_cfg is not None:
+            self.premade_place_goal_list: List[Actor] = [
+                self._make_goal(
+                    radius=self.place_cfg.obj_goal_thresh,
+                    name=f"goal_{subtask_num}",
+                )
+                for subtask_num in range(self.seq_task_len)
+            ]
 
         self.build_config_idx_to_task_plans: Dict[int, List[TaskPlan]] = dict()
         for bc in self.base_task_plans.keys():
@@ -477,7 +478,6 @@ class SequentialTaskEnv(SceneManipulationEnv):
                 ) = self._pick_check_success(
                     self.subtask_objs[subtask_num],
                     env_idx,
-                    ee_rest_thresh=self.pick_cfg.ee_rest_thresh,
                 )
             elif isinstance(subtask, PlaceSubtask):
                 (
@@ -487,8 +487,6 @@ class SequentialTaskEnv(SceneManipulationEnv):
                     self.subtask_objs[subtask_num],
                     self.subtask_goals[subtask_num],
                     env_idx,
-                    obj_goal_thresh=self.place_cfg.obj_goal_thresh,
-                    ee_rest_thresh=self.place_cfg.ee_rest_thresh,
                 )
             elif isinstance(subtask, NavigateSubtask):
                 (
@@ -498,7 +496,6 @@ class SequentialTaskEnv(SceneManipulationEnv):
                     self.subtask_objs[subtask_num],
                     self.subtask_goals[subtask_num],
                     env_idx,
-                    ee_rest_thresh=self.place_cfg.ee_rest_thresh,
                 )
             else:
                 raise AttributeError(f"{subtask.type} {type(subtask)} not supported")
@@ -516,7 +513,6 @@ class SequentialTaskEnv(SceneManipulationEnv):
         self,
         obj: Actor,
         env_idx: torch.Tensor,
-        ee_rest_thresh: float = 0.05,
     ):
         is_grasped = self.agent.is_grasping(obj, max_angle=30)[env_idx]
         ee_rest = (
@@ -524,7 +520,7 @@ class SequentialTaskEnv(SceneManipulationEnv):
                 self.agent.tcp_pose.p[env_idx] - self.ee_rest_world_pose.p[env_idx],
                 dim=1,
             )
-            <= ee_rest_thresh
+            <= self.pick_cfg.ee_rest_thresh
         )
         robot_rest_dist = torch.abs(
             self.agent.robot.qpos[env_idx, 3:-2] - self.resting_qpos
@@ -548,26 +544,24 @@ class SequentialTaskEnv(SceneManipulationEnv):
         obj: Actor,
         obj_goal: Actor,
         env_idx: torch.Tensor,
-        obj_goal_thresh: float = 0.15,
-        ee_rest_thresh: float = 0.05,
     ):
         is_grasped = self.agent.is_grasping(obj, max_angle=30)[env_idx]
         obj_at_goal = (
             torch.norm(obj.pose.p[env_idx] - obj_goal.pose.p[env_idx], dim=1)
-            <= obj_goal_thresh
+            <= self.place_cfg.obj_goal_thresh
         )
         ee_rest = (
             torch.norm(
                 self.agent.tcp_pose.p[env_idx] - self.ee_rest_world_pose.p[env_idx],
                 dim=1,
             )
-            <= ee_rest_thresh
+            <= self.place_cfg.ee_rest_thresh
         )
         robot_rest_dist = torch.abs(
             self.agent.robot.qpos[env_idx, 3:-2] - self.resting_qpos
         )
         robot_rest = torch.all(
-            robot_rest_dist < self.pick_cfg.robot_resting_qpos_tolerance, dim=1
+            robot_rest_dist < self.place_cfg.robot_resting_qpos_tolerance, dim=1
         )
         is_static = self.agent.is_static(threshold=0.2)[env_idx]
         return (
@@ -586,7 +580,6 @@ class SequentialTaskEnv(SceneManipulationEnv):
         obj: Union[Actor, None],
         goal: Actor,
         env_idx: torch.Tensor,
-        ee_rest_thresh: float = 0.05,
     ):
         if obj is not None:
             is_grasped = self.agent.is_grasping(obj, max_angle=30)[env_idx]
@@ -607,15 +600,15 @@ class SequentialTaskEnv(SceneManipulationEnv):
                 self.agent.tcp_pose.p[env_idx] - self.ee_rest_world_pose.p[env_idx],
                 dim=1,
             )
-            <= ee_rest_thresh
+            <= self.navigate_cfg.ee_rest_thresh
         )
         robot_rest_dist = torch.abs(
             self.agent.robot.qpos[env_idx, 3:-2] - self.resting_qpos
         )
         rest_tolerance = (
-            self.pick_cfg.robot_resting_qpos_tolerance
+            self.navigate_cfg.robot_resting_qpos_tolerance
             if obj is None
-            else self.pick_cfg.robot_resting_qpos_tolerance_grasping
+            else self.navigate_cfg.robot_resting_qpos_tolerance_grasping
         )
         robot_rest = torch.all(robot_rest_dist < rest_tolerance, dim=1)
         is_static = self.agent.is_static(threshold=0.2)[env_idx]
