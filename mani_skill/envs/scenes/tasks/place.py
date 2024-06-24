@@ -113,7 +113,6 @@ class PlaceSubtaskTrainEnv(SubtaskTrainEnv):
             )
             # keep going until no collisions
             while True:
-
                 centers = self.subtask_goals[0].pose.p[env_idx, :2]
                 navigable_positions = []
                 for env_num, center in zip(env_idx, centers):
@@ -265,9 +264,6 @@ class PlaceSubtaskTrainEnv(SubtaskTrainEnv):
                 self.scene.step()
 
                 obj_force = self.subtask_objs[0].get_net_contact_forces().norm(dim=-1)
-                if physx.is_gpu_enabled():
-                    obj_force = obj_force.sum(dim=-1)
-
                 obj_spawn_fail = obj_force >= 1e-3
 
                 # ---------------------------------------------------
