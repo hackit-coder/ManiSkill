@@ -332,7 +332,11 @@ class PlaceSubtaskTrainEnv(SubtaskTrainEnv):
             )
             obj_at_goal = obj_to_goal_dist <= self.place_cfg.obj_goal_thresh
 
-            self.dropped_before_place |= ~obj_at_goal & ~infos["grasped"]
+            self.dropped_before_place = self.dropped_before_place | (
+                ~obj_at_goal
+                & ~infos["is_grasped"]
+                & (self.place_cfg.horizon - self.subtask_steps_left > 5)
+            )
 
             infos.update(
                 obj_at_goal=obj_at_goal,
