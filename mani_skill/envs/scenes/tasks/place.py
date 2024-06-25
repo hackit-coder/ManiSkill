@@ -367,9 +367,7 @@ class PlaceSubtaskTrainEnv(SubtaskTrainEnv):
 
             obj_at_goal = info["obj_at_goal"]
             obj_to_goal_dist = info["obj_to_goal_dist"]
-            tcp_to_goal_dist = torch.norm(
-                tcp_pos - goal_pos, dim=1
-            )
+            tcp_to_goal_dist = torch.norm(tcp_pos - goal_pos, dim=1)
             obj_at_goal_reward = torch.zeros_like(reward[obj_at_goal])
 
             obj_not_at_goal = ~obj_at_goal
@@ -437,10 +435,13 @@ class PlaceSubtaskTrainEnv(SubtaskTrainEnv):
 
                 # ee and tcp close to goal
                 place_rew = 5 * (
-                    2
+                    1
                     - (
-                        torch.tanh(obj_to_goal_dist[obj_not_at_goal])
-                        + torch.tanh(tcp_to_goal_dist[obj_not_at_goal])
+                        (
+                            torch.tanh(obj_to_goal_dist[obj_not_at_goal])
+                            + torch.tanh(tcp_to_goal_dist[obj_not_at_goal])
+                        )
+                        / 2
                     )
                 )
                 obj_not_at_goal_reward += place_rew
