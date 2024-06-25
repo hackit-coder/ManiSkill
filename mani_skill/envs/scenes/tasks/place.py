@@ -365,16 +365,21 @@ class PlaceSubtaskTrainEnv(SubtaskTrainEnv):
             # CONDITION CHECKERS
             # ---------------------------------------------------
 
-            obj_at_goal = info["obj_at_goal"]
             obj_to_goal_dist = info["obj_to_goal_dist"]
             tcp_to_goal_dist = torch.norm(tcp_pos - goal_pos, dim=1)
-            obj_at_goal_reward = torch.zeros_like(reward[obj_at_goal])
 
-            obj_not_at_goal = ~obj_at_goal
+            obj_not_at_goal = ~info["obj_at_goal"]
             obj_not_at_goal_reward = torch.zeros_like(reward[obj_not_at_goal])
 
+            obj_at_goal_maybe_dropped = info["obj_at_goal"]
+            obj_at_goal_maybe_dropped_reward = torch.zeros_like(
+                reward[obj_at_goal_maybe_dropped]
+            )
+
             ee_to_rest_dist = torch.norm(tcp_pos - rest_pos, dim=1)
-            ee_rest = obj_at_goal & (ee_to_rest_dist <= self.place_cfg.ee_rest_thresh)
+            ee_rest = obj_at_goal_maybe_dropped & (
+                ee_to_rest_dist <= self.place_cfg.ee_rest_thresh
+            )
             ee_rest_reward = torch.zeros_like(reward[ee_rest])
 
             # ---------------------------------------------------
@@ -446,24 +451,26 @@ class PlaceSubtaskTrainEnv(SubtaskTrainEnv):
                 )
                 obj_not_at_goal_reward += place_rew
 
-            if torch.any(obj_at_goal):
+            if torch.any(obj_at_goal_maybe_dropped):
                 # add prev step max rew
-                obj_at_goal_reward += 8
+                obj_at_goal_maybe_dropped_reward += 7
 
                 # rest reward
-                rest_rew = 5 * (1 - torch.tanh(3 * ee_to_rest_dist[obj_at_goal]))
-                obj_at_goal_reward += rest_rew
+                rest_rew = 5 * (
+                    1 - torch.tanh(3 * ee_to_rest_dist[obj_at_goal_maybe_dropped])
+                )
+                obj_at_goal_maybe_dropped_reward += rest_rew
 
                 # additional encourage arm and torso in "resting" orientation
                 more_arm_resting_orientation_rew = 2 * (
-                    1 - torch.tanh(arm_to_resting_diff[obj_at_goal])
+                    1 - torch.tanh(arm_to_resting_diff[obj_at_goal_maybe_dropped])
                 )
-                obj_at_goal_reward += more_arm_resting_orientation_rew
+                obj_at_goal_maybe_dropped_reward += more_arm_resting_orientation_rew
 
                 # penalty for base moving or rotating too much
-                bqvel = self.agent.robot.qvel[..., :3][obj_at_goal]
+                bqvel = self.agent.robot.qvel[..., :3][obj_at_goal_maybe_dropped]
                 base_still_rew = 1 - torch.tanh(torch.norm(bqvel, dim=1))
-                obj_at_goal_reward += base_still_rew
+                obj_at_goal_maybe_dropped_reward += base_still_rew
 
             if torch.any(ee_rest):
                 ee_rest_reward += 2
@@ -479,7 +486,7 @@ class PlaceSubtaskTrainEnv(SubtaskTrainEnv):
 
             # add rewards to specific envs
             reward[obj_not_at_goal] += obj_not_at_goal_reward
-            reward[obj_at_goal] += obj_at_goal_reward
+            reward[obj_at_goal_maybe_dropped] += obj_at_goal_maybe_dropped_reward
             reward[ee_rest] += ee_rest_reward
 
         return reward
