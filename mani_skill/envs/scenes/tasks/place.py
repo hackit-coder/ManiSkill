@@ -388,6 +388,9 @@ class PlaceSubtaskTrainEnv(SubtaskTrainEnv):
 
             # ---------------------------------------------------
 
+            # dbp
+            reward += 5 * (~info["dropped_before_place"]).float()
+
             # penalty for ee jittering too much
             ee_vel = self.agent.tcp.linear_velocity
             ee_still_rew = 1 - torch.tanh(torch.norm(ee_vel, dim=1) / 5)
@@ -504,7 +507,7 @@ class PlaceSubtaskTrainEnv(SubtaskTrainEnv):
     def compute_normalized_dense_reward(
         self, obs: Any, action: torch.Tensor, info: Dict
     ):
-        max_reward = 34.0
+        max_reward = 39.0
         return self.compute_dense_reward(obs=obs, action=action, info=info) / max_reward
 
     # -------------------------------------------------------------------------------------------------
