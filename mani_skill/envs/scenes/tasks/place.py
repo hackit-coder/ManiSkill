@@ -317,6 +317,31 @@ class PlaceSubtaskTrainEnv(SubtaskTrainEnv):
     # REWARD
     # -------------------------------------------------------------------------------------------------
 
+    def reset(self, *args, **kwargs):
+        self.dropped_before_place = torch.zeros(
+            self.num_envs, dtype=torch.bool, device=self.device
+        )
+        return super().reset(*args, **kwargs)
+
+    def evaluate(self):
+        with torch.device(self.device):
+            infos = super().evaluate()
+
+            obj_to_goal_dist = torch.norm(
+                self.subtask_objs[0].pose.p - self.subtask_goals[0].pose.p, dim=1
+            )
+            obj_at_goal = obj_to_goal_dist <= self.place_cfg.obj_goal_thresh
+
+            self.dropped_before_place |= ~obj_at_goal & ~infos["grasped"]
+
+            infos.update(
+                obj_at_goal=obj_at_goal,
+                obj_to_goal_dist=obj_to_goal_dist,
+                dropped_before_place=self.dropped_before_place,
+            )
+
+            return infos
+
     def compute_dense_reward(self, obs: Any, action: torch.Tensor, info: Dict):
         with torch.device(self.device):
             reward = torch.zeros(self.num_envs)
@@ -340,8 +365,11 @@ class PlaceSubtaskTrainEnv(SubtaskTrainEnv):
             # CONDITION CHECKERS
             # ---------------------------------------------------
 
-            obj_to_goal_dist = torch.norm(obj_pos - goal_pos, dim=1)
-            obj_at_goal = obj_to_goal_dist <= self.place_cfg.obj_goal_thresh
+            obj_at_goal = info["obj_at_goal"]
+            obj_to_goal_dist = info["obj_to_goal_dist"]
+            tcp_to_goal_dist = torch.norm(
+                tcp_pos - goal_pos, dim=1
+            )
             obj_at_goal_reward = torch.zeros_like(reward[obj_at_goal])
 
             obj_not_at_goal = ~obj_at_goal
@@ -404,43 +432,26 @@ class PlaceSubtaskTrainEnv(SubtaskTrainEnv):
             # ---------------------------------------------------------------
 
             if torch.any(obj_not_at_goal):
-                # ee places obj at goal (instead of throwing)
+                # ee holding object
                 obj_not_at_goal_reward += 2 * info["is_grasped"][obj_not_at_goal]
 
-                # obj place reward
-                place_rew = 5 * (1 - torch.tanh(obj_to_goal_dist[obj_not_at_goal]))
-                obj_not_at_goal_reward += place_rew
-
-                x = torch.zeros_like(reward)
-                x[obj_not_at_goal] = place_rew
-
-                # rew for ee over goal
-                ee_over_goal_rew = 1 - torch.tanh(
-                    5
-                    * torch.norm(
-                        tcp_pos[..., :2][obj_not_at_goal]
-                        - goal_pos[..., :2][obj_not_at_goal],
-                        dim=1,
+                # ee and tcp close to goal
+                place_rew = 5 * (
+                    2
+                    - (
+                        torch.tanh(obj_to_goal_dist[obj_not_at_goal])
+                        + torch.tanh(tcp_to_goal_dist[obj_not_at_goal])
                     )
                 )
-                obj_not_at_goal_reward += ee_over_goal_rew
-
-                x = torch.zeros_like(reward)
-                x[obj_not_at_goal] = ee_over_goal_rew
+                obj_not_at_goal_reward += place_rew
 
             if torch.any(obj_at_goal):
                 # add prev step max rew
                 obj_at_goal_reward += 8
 
-                # obj_left_at_goal
-                obj_at_goal_reward += 2 * ~info["is_grasped"][obj_at_goal]
-
                 # rest reward
                 rest_rew = 5 * (1 - torch.tanh(3 * ee_to_rest_dist[obj_at_goal]))
                 obj_at_goal_reward += rest_rew
-
-                x = torch.zeros_like(reward)
-                x[obj_at_goal] = rest_rew
 
                 # additional encourage arm and torso in "resting" orientation
                 more_arm_resting_orientation_rew = 2 * (
@@ -448,16 +459,10 @@ class PlaceSubtaskTrainEnv(SubtaskTrainEnv):
                 )
                 obj_at_goal_reward += more_arm_resting_orientation_rew
 
-                x = torch.zeros_like(reward).float()
-                x[obj_at_goal] = more_arm_resting_orientation_rew.float()
-
                 # penalty for base moving or rotating too much
                 bqvel = self.agent.robot.qvel[..., :3][obj_at_goal]
                 base_still_rew = 1 - torch.tanh(torch.norm(bqvel, dim=1))
                 obj_at_goal_reward += base_still_rew
-
-                x = torch.zeros_like(reward)
-                x[obj_at_goal] = base_still_rew
 
             if torch.any(ee_rest):
                 ee_rest_reward += 2
@@ -466,16 +471,10 @@ class PlaceSubtaskTrainEnv(SubtaskTrainEnv):
                 static_rew = 1 - torch.tanh(torch.norm(qvel, dim=1))
                 ee_rest_reward += static_rew
 
-                x = torch.zeros_like(reward)
-                x[ee_rest] = static_rew
-
                 # penalty for base moving or rotating too much
                 bqvel = self.agent.robot.qvel[..., :3][ee_rest]
                 base_still_rew = 1 - torch.tanh(torch.norm(bqvel, dim=1))
                 ee_rest_reward += base_still_rew
-
-                x = torch.zeros_like(reward)
-                x[ee_rest] = base_still_rew
 
             # add rewards to specific envs
             reward[obj_not_at_goal] += obj_not_at_goal_reward
@@ -487,7 +486,7 @@ class PlaceSubtaskTrainEnv(SubtaskTrainEnv):
     def compute_normalized_dense_reward(
         self, obs: Any, action: torch.Tensor, info: Dict
     ):
-        max_reward = 34.0
+        max_reward = 32.0
         return self.compute_dense_reward(obs=obs, action=action, info=info) / max_reward
 
     # -------------------------------------------------------------------------------------------------
