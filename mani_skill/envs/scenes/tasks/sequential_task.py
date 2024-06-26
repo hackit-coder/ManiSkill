@@ -180,10 +180,21 @@ class SequentialTaskEnv(SceneManipulationEnv):
                     BAs.append(grcs[0] - grcs[1])
                 Bs, BCs, BAs = np.array(Bs), np.array(BCs), np.array(BAs)
 
+                u_prop, v_prop = np.clip(
+                    (self.place_cfg.obj_goal_thresh / 3)
+                    / np.linalg.norm(BCs, axis=1, keepdims=True),
+                    0,
+                    0.5,
+                ), np.clip(
+                    (self.place_cfg.obj_goal_thresh / 3)
+                    / np.linalg.norm(BAs, axis=1, keepdims=True),
+                    0,
+                    0.5,
+                )
                 u, v = self.np_random.uniform(
-                    low=0, high=1, size=(len(parallel_subtasks), 1)
+                    low=u_prop, high=1 - u_prop, size=(len(parallel_subtasks), 1)
                 ), self.np_random.uniform(
-                    low=0, high=1, size=(len(parallel_subtasks), 1)
+                    low=v_prop, high=1 - v_prop, size=(len(parallel_subtasks), 1)
                 )
 
                 goal_pos = ((BCs * u + BAs * v) + Bs).tolist()
