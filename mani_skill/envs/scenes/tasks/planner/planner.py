@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from typing import Union, Tuple, List
 import shortuuid
 
+import numpy as np
+
 """
 Task Planner Dataclasses
 """
@@ -89,9 +91,19 @@ class PlaceSubtask(Subtask):
                 rect_corners[i] = [float(coord) for coord in corner.split(",")]
         # make sure have exactly 4 corners at the same height
         assert len(rect_corners) == 4, "Goal rectangle must have exactly 4 corners"
-        # assuming a rectangle, this should always place in ABCD order
-        cs = sorted(rect_corners)
-        return [cs[0], cs[1], cs[3], cs[2]]
+        A, B, C, D = [np.array(corner) for corner in rect_corners]
+        sides0 = np.array([B - A, C - B, D - C, A - D])
+        sides1 = np.array([D - A, A - B, B - C, C - D])
+        points_angles = np.rad2deg(
+            np.arccos(
+                np.sum(sides0 * sides1, axis=1)
+                / (np.linalg.norm(sides0, axis=1) * np.linalg.norm(sides1, axis=1))
+            )
+        )
+        assert np.all(
+            np.abs(points_angles - 90) < 1e-3
+        ), f"Should have points in ABCD order, but got angles {points_angles} between sides AB/AD, BC/BA, CD/CB, DA/DC"
+        return rect_corners
 
 
 @dataclass

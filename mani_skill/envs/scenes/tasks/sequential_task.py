@@ -181,12 +181,12 @@ class SequentialTaskEnv(SceneManipulationEnv):
                 Bs, BCs, BAs = np.array(Bs), np.array(BCs), np.array(BAs)
 
                 u_prop, v_prop = np.clip(
-                    (self.place_cfg.obj_goal_thresh / 3)
+                    self.place_cfg.obj_goal_thresh
                     / np.linalg.norm(BCs, axis=1, keepdims=True),
                     0,
                     0.5,
                 ), np.clip(
-                    (self.place_cfg.obj_goal_thresh / 3)
+                    self.place_cfg.obj_goal_thresh
                     / np.linalg.norm(BAs, axis=1, keepdims=True),
                     0,
                     0.5,
@@ -283,15 +283,27 @@ class SequentialTaskEnv(SceneManipulationEnv):
         pos: Union[Tuple[float, float, float], List[Tuple[float, float, float]]] = None,
         radius=0.15,
         name="goal_site",
+        goal_type="sphere",
+        color=[0, 1, 0, 1],
     ):
-        goal = actors.build_sphere(
-            self.scene,
-            radius=radius,
-            color=[0, 1, 0, 1],
-            name=name,
-            body_type="kinematic",
-            add_collision=False,
-        )
+        if goal_type == "sphere":
+            goal = actors.build_sphere(
+                self.scene,
+                radius=radius,
+                color=color,
+                name=name,
+                body_type="kinematic",
+                add_collision=False,
+            )
+        elif goal_type == "cube":
+            goal = actors.build_cube(
+                self.scene,
+                half_size=radius,
+                color=color,
+                name=name,
+                body_type="kinematic",
+                add_collision=False,
+            )
         if pos is not None:
             if len(pos) == self.num_envs:
                 goal.set_pose(Pose.create_from_pq(p=pos))
@@ -316,6 +328,7 @@ class SequentialTaskEnv(SceneManipulationEnv):
                 self._make_goal(
                     radius=self.place_cfg.obj_goal_thresh,
                     name=f"goal_{subtask_num}",
+                    goal_type="cube",
                 )
                 for subtask_num in range(self.seq_task_len)
             ]
@@ -361,6 +374,7 @@ class SequentialTaskEnv(SceneManipulationEnv):
         self.ee_rest_goal = self._make_goal(
             radius=0.05,
             name="ee_rest_goal",
+            goal_type="sphere",
         )
 
     def _initialize_episode(self, env_idx: torch.Tensor, options):
@@ -557,9 +571,10 @@ class SequentialTaskEnv(SceneManipulationEnv):
         env_idx: torch.Tensor,
     ):
         is_grasped = self.agent.is_grasping(obj, max_angle=30)[env_idx]
-        obj_at_goal = (
-            torch.norm(obj.pose.p[env_idx] - obj_goal.pose.p[env_idx], dim=1)
-            <= self.place_cfg.obj_goal_thresh
+        obj_at_goal = torch.all(
+            torch.abs(obj.pose.p[env_idx] - obj_goal.pose.p[env_idx])
+            <= self.place_cfg.obj_goal_thresh,
+            dim=1,
         )
         ee_rest = (
             torch.norm(

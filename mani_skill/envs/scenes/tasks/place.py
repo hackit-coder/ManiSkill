@@ -317,35 +317,6 @@ class PlaceSubtaskTrainEnv(SubtaskTrainEnv):
     # REWARD
     # -------------------------------------------------------------------------------------------------
 
-    def reset(self, *args, **kwargs):
-        self.dropped_before_place = torch.zeros(
-            self.num_envs, dtype=torch.bool, device=self.device
-        )
-        return super().reset(*args, **kwargs)
-
-    def evaluate(self):
-        with torch.device(self.device):
-            infos = super().evaluate()
-
-            obj_to_goal_dist = torch.norm(
-                self.subtask_objs[0].pose.p - self.subtask_goals[0].pose.p, dim=1
-            )
-            obj_at_goal = obj_to_goal_dist <= self.place_cfg.obj_goal_thresh
-
-            self.dropped_before_place = self.dropped_before_place | (
-                ~obj_at_goal
-                & ~infos["is_grasped"]
-                & (self.place_cfg.horizon - self.subtask_steps_left > 5)
-            )
-
-            infos.update(
-                obj_at_goal=obj_at_goal,
-                obj_to_goal_dist=obj_to_goal_dist,
-                dropped_before_place=self.dropped_before_place,
-            )
-
-            return infos
-
     def compute_dense_reward(self, obs: Any, action: torch.Tensor, info: Dict):
         with torch.device(self.device):
             reward = torch.zeros(self.num_envs)
@@ -369,7 +340,7 @@ class PlaceSubtaskTrainEnv(SubtaskTrainEnv):
             # CONDITION CHECKERS
             # ---------------------------------------------------
 
-            obj_to_goal_dist = info["obj_to_goal_dist"]
+            obj_to_goal_dist = torch.norm(obj_pos - goal_pos, dim=1)
             tcp_to_goal_dist = torch.norm(tcp_pos - goal_pos, dim=1)
 
             obj_not_at_goal = ~info["obj_at_goal"]
