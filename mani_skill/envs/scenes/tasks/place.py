@@ -436,6 +436,8 @@ class PlaceSubtaskTrainEnv(SubtaskTrainEnv):
                 # add prev step max rew
                 obj_at_goal_maybe_dropped_reward += 7
 
+                obj_at_goal_maybe_dropped_reward += (~info["is_grasped"][obj_at_goal_maybe_dropped]).float()
+
                 # rest reward
                 rest_rew = 5 * (
                     1 - torch.tanh(3 * ee_to_rest_dist[obj_at_goal_maybe_dropped])
@@ -475,7 +477,7 @@ class PlaceSubtaskTrainEnv(SubtaskTrainEnv):
     def compute_normalized_dense_reward(
         self, obs: Any, action: torch.Tensor, info: Dict
     ):
-        max_reward = 34.0
+        max_reward = 35.0
         return self.compute_dense_reward(obs=obs, action=action, info=info) / max_reward
 
     # -------------------------------------------------------------------------------------------------
