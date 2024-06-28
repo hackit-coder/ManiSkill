@@ -45,6 +45,31 @@ def build_cube(
     return _build_by_type(builder, name, body_type)
 
 
+def build_cylinder(
+    scene: ManiSkillScene,
+    radius: float,
+    half_length: float,
+    color,
+    name: str,
+    body_type: str = "dynamic",
+    add_collision: bool = True,
+):
+    builder = scene.create_actor_builder()
+    if add_collision:
+        builder.add_cylinder_collision(
+            radius=radius,
+            half_length=half_length,
+        )
+    builder.add_cylinder_visual(
+        radius=radius,
+        half_length=half_length,
+        material=sapien.render.RenderMaterial(
+            base_color=color,
+        ),
+    )
+    return _build_by_type(builder, name, body_type)
+
+
 def build_box(
     scene: ManiSkillScene,
     half_sizes,

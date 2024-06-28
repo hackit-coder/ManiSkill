@@ -5,6 +5,7 @@ import sapien
 import torch
 import torch.random
 import numpy as np
+import transforms3d
 
 from mani_skill.agents.robots import Fetch
 from mani_skill.envs.scenes.base_env import SceneManipulationEnv
@@ -31,6 +32,9 @@ from .planner import (
 
 UNIQUE_SUCCESS_SUBTASK_TYPE = 100_000
 HIDDEN_POSITION = [99999, 99999, 99999]
+GOAL_POSE_Q = transforms3d.quaternions.axangle2quat(
+    np.array([0, 1, 0]), theta=np.deg2rad(90)
+)
 
 
 def all_equal(array: list):
@@ -174,7 +178,6 @@ class SequentialTaskEnv(SceneManipulationEnv):
                             p=subtask.goal_rectangle_probs,
                         )
                     )
-                    grcs[..., 2] += self.place_cfg.obj_goal_thresh * 2 / 3
                     Bs.append(grcs[1])
                     BCs.append(grcs[2] - grcs[1])
                     BAs.append(grcs[0] - grcs[1])
@@ -199,7 +202,10 @@ class SequentialTaskEnv(SceneManipulationEnv):
 
                 goal_pos = ((BCs * u + BAs * v) + Bs).tolist()
                 self.premade_place_goal_list[subtask_num].set_pose(
-                    Pose.create_from_pq(p=torch.tensor(goal_pos))
+                    Pose.create_from_pq(
+                        q=GOAL_POSE_Q,
+                        p=torch.tensor(goal_pos),
+                    )
                 )
                 self.subtask_goals.append(self.premade_place_goal_list[subtask_num])
 
@@ -304,6 +310,16 @@ class SequentialTaskEnv(SceneManipulationEnv):
                 body_type="kinematic",
                 add_collision=False,
             )
+        elif goal_type == "cylinder":
+            goal = actors.build_cylinder(
+                self.scene,
+                radius=radius,
+                half_length=radius,
+                color=color,
+                name=name,
+                body_type="kinematic",
+                add_collision=False,
+            )
         if pos is not None:
             if len(pos) == self.num_envs:
                 goal.set_pose(Pose.create_from_pq(p=pos))
@@ -328,7 +344,7 @@ class SequentialTaskEnv(SceneManipulationEnv):
                 self._make_goal(
                     radius=self.place_cfg.obj_goal_thresh,
                     name=f"goal_{subtask_num}",
-                    goal_type="cube",
+                    goal_type="cylinder",
                 )
                 for subtask_num in range(self.seq_task_len)
             ]
@@ -571,11 +587,18 @@ class SequentialTaskEnv(SceneManipulationEnv):
         env_idx: torch.Tensor,
     ):
         is_grasped = self.agent.is_grasping(obj, max_angle=30)[env_idx]
-        obj_at_goal = torch.all(
-            torch.abs(obj.pose.p[env_idx] - obj_goal.pose.p[env_idx])
-            <= self.place_cfg.obj_goal_thresh,
-            dim=1,
+        xy_correct = (
+            torch.norm(
+                obj.pose.p[env_idx, :2] - obj_goal.pose.p[env_idx, :2],
+                dim=1,
+            )
+            <= self.place_cfg.obj_goal_thresh
         )
+        z_correct = (
+            torch.abs(obj.pose.p[env_idx, 2] - obj_goal.pose.p[env_idx, 2])
+            <= self.place_cfg.obj_goal_thresh
+        )
+        obj_at_goal = xy_correct & z_correct
         ee_rest = (
             torch.norm(
                 self.agent.tcp_pose.p[env_idx] - self.ee_rest_world_pose.p[env_idx],

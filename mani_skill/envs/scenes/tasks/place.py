@@ -364,15 +364,16 @@ class PlaceSubtaskTrainEnv(SubtaskTrainEnv):
             ee_still_rew = 1 - torch.tanh(torch.norm(ee_vel, dim=1) / 5)
             reward += ee_still_rew
 
-            # penalty for object moving too much
+            # penalty for object moving too much when not grasped
             obj_vel = torch.norm(
                 self.subtask_objs[0].linear_velocity, dim=1
             ) + torch.norm(self.subtask_objs[0].angular_velocity, dim=1)
+            obj_vel[info["is_grasped"]] = 0
             obj_still_rew = 3 * (1 - torch.tanh(obj_vel / 5))
             reward += obj_still_rew
 
             # success reward
-            success_rew = 3 * info["success"]
+            success_rew = 6 * info["success"]
             reward += success_rew
 
             # encourage arm and torso in "resting" orientation
@@ -382,11 +383,6 @@ class PlaceSubtaskTrainEnv(SubtaskTrainEnv):
             )
             arm_resting_orientation_rew = 2 * (1 - torch.tanh(arm_to_resting_diff))
             reward += arm_resting_orientation_rew
-
-            # penalty for torso moving up and down too much
-            tqvel_z = self.agent.robot.qvel[..., 3]
-            torso_not_moving_rew = 1 - torch.tanh(5 * torch.abs(tqvel_z))
-            reward += torso_not_moving_rew
 
             # ---------------------------------------------------------------
             # colliisions
@@ -475,7 +471,7 @@ class PlaceSubtaskTrainEnv(SubtaskTrainEnv):
     def compute_normalized_dense_reward(
         self, obs: Any, action: torch.Tensor, info: Dict
     ):
-        max_reward = 34.0
+        max_reward = 36.0
         return self.compute_dense_reward(obs=obs, action=action, info=info) / max_reward
 
     # -------------------------------------------------------------------------------------------------
