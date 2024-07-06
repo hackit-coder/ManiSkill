@@ -110,6 +110,7 @@ class SequentialTaskEnv(SceneManipulationEnv):
         task_cfg_update_dict = kwargs.pop("task_cfgs", dict())
         for k, v in task_cfg_update_dict.items():
             self.task_cfgs[k].update(v)
+        print(kwargs.keys())
 
         assert all_equal(
             [len(plan.subtasks) for plan in task_plans]
