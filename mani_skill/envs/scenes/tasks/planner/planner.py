@@ -3,7 +3,7 @@ import yaml
 from dacite import from_dict
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Union, Tuple, List
+from typing import Union, Tuple, List, Dict
 import shortuuid
 
 import numpy as np
@@ -40,6 +40,12 @@ class SubtaskConfig:
     def __post_init__(self):
         assert self.horizon > 0
         assert self.ee_rest_thresh >= 0
+
+    def update(self, update_dict: Dict):
+        for k, v in update_dict.items():
+            if getattr(self, k, None) is not None:
+                setattr(self, k, v)
+        return self
 
 
 @dataclass

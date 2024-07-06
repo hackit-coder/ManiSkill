@@ -80,11 +80,6 @@ class SequentialTaskEnv(SceneManipulationEnv):
         ee_rest_thresh=0.05,
         navigated_sucessfully_dist=2,
     )
-    task_cfgs: Dict[str, SubtaskConfig] = dict(
-        pick=pick_cfg,
-        place=place_cfg,
-        navigate=navigate_cfg,
-    )
 
     @property
     def _default_sim_config(self):
@@ -106,6 +101,16 @@ class SequentialTaskEnv(SceneManipulationEnv):
         require_build_configs_repeated_equally_across_envs=True,
         **kwargs,
     ):
+        self.task_cfgs: Dict[str, SubtaskConfig] = dict(
+            pick=self.pick_cfg,
+            place=self.place_cfg,
+            navigate=self.navigate_cfg,
+        )
+
+        task_cfg_update_dict = kwargs.pop("task_cfgs", dict())
+        for k, v in task_cfg_update_dict.items():
+            self.task_cfgs[k].update(v)
+
         assert all_equal(
             [len(plan.subtasks) for plan in task_plans]
         ), "All parallel task plans must be the same length"
