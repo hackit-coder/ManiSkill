@@ -40,6 +40,9 @@ class SubtaskConfig:
     def __post_init__(self):
         assert self.horizon > 0
         assert self.ee_rest_thresh >= 0
+        assert self.robot_init_qpos_noise >= 0
+        assert self.robot_resting_qpos_tolerance >= 0
+        assert self.robot_resting_qpos_tolerance_grasping >= 0
 
     def update(self, update_dict: Dict):
         for k, v in update_dict.items():
@@ -70,23 +73,26 @@ class PlaceSubtask(Subtask):
     )
     goal_rectangle_probs: Union[List[float], None] = None
     goal_pos: Union[PointTuple, None] = None
+    validate_goal_rectangle_corners: bool = True
 
     def __post_init__(self):
         self.type = "place"
         super().__post_init__()
-        if self.goal_rectangle_corners is not None:
-            if self.goal_rectangle_probs is None:
-                self.goal_rectangle_corners = self._parse_rect_corners(
-                    self.goal_rectangle_corners
-                )
-            else:
-                assert len(self.goal_rectangle_corners) == len(
-                    self.goal_rectangle_probs
-                )
-                assert abs(sum(self.goal_rectangle_probs) - 1) <= 1e-3
-                self.goal_rectangle_corners = [
-                    self._parse_rect_corners(grc) for grc in self.goal_rectangle_corners
-                ]
+        if self.validate_goal_rectangle_corners:
+            if self.goal_rectangle_corners is not None:
+                if self.goal_rectangle_probs is None:
+                    self.goal_rectangle_corners = self._parse_rect_corners(
+                        self.goal_rectangle_corners
+                    )
+                else:
+                    assert len(self.goal_rectangle_corners) == len(
+                        self.goal_rectangle_probs
+                    )
+                    assert abs(sum(self.goal_rectangle_probs) - 1) <= 1e-3
+                    self.goal_rectangle_corners = [
+                        self._parse_rect_corners(grc)
+                        for grc in self.goal_rectangle_corners
+                    ]
 
         if isinstance(self.goal_pos, str):
             self.goal_pos = [float(coord) for coord in self.goal_pos.split(",")]
@@ -116,10 +122,14 @@ class PlaceSubtask(Subtask):
 class PlaceSubtaskConfig(SubtaskConfig):
     task_id: int = 1
     obj_goal_thresh: float = 0.15
+    goal_type: str = "zone"
 
     def __post_init__(self):
         super().__post_init__()
         assert self.obj_goal_thresh >= 0
+        # cylinder means cylindrical goal centered at place_subtask.goal_pos
+        # zone means use place_subtask.goal_rectangle_corners to establish rectangular zone
+        assert self.goal_type in ["zone", "cylinder"]
 
 
 @dataclass

@@ -40,6 +40,7 @@ class PlaceSubtaskTrainEnv(SubtaskTrainEnv):
         horizon=200,
         ee_rest_thresh=0.05,
         robot_init_qpos_noise=0.2,
+        goal_type="cylinder",
     )
 
     def __init__(

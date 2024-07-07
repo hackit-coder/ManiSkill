@@ -110,7 +110,6 @@ class SequentialTaskEnv(SceneManipulationEnv):
         task_cfg_update_dict = kwargs.pop("task_cfgs", dict())
         for k, v in task_cfg_update_dict.items():
             self.task_cfgs[k].update(v)
-        print(kwargs.keys())
 
         assert all_equal(
             [len(plan.subtasks) for plan in task_plans]
@@ -174,7 +173,7 @@ class SequentialTaskEnv(SceneManipulationEnv):
                     )
                 )
 
-                Bs, BCs, BAs = [], [], []
+                merged_goal_rectangle_corners = []
                 for subtask in parallel_subtasks:
                     grcs = np.array(
                         subtask.goal_rectangle_corners
@@ -184,10 +183,17 @@ class SequentialTaskEnv(SceneManipulationEnv):
                             p=subtask.goal_rectangle_probs,
                         )
                     )
-                    Bs.append(grcs[1])
-                    BCs.append(grcs[2] - grcs[1])
-                    BAs.append(grcs[0] - grcs[1])
-                Bs, BCs, BAs = np.array(Bs), np.array(BCs), np.array(BAs)
+                    merged_goal_rectangle_corners.append(grcs)
+                merged_goal_rectangle_corners = np.array(merged_goal_rectangle_corners)
+                Bs = merged_goal_rectangle_corners[:, 1]
+                BCs = (
+                    merged_goal_rectangle_corners[:, 2]
+                    - merged_goal_rectangle_corners[:, 1]
+                )
+                BAs = (
+                    merged_goal_rectangle_corners[:, 0]
+                    - merged_goal_rectangle_corners[:, 1]
+                )
 
                 u_prop, v_prop = np.clip(
                     self.place_cfg.obj_goal_thresh
@@ -219,6 +225,10 @@ class SequentialTaskEnv(SceneManipulationEnv):
                     PlaceSubtask(
                         obj_id=merged_obj_name,
                         goal_pos=goal_pos,
+                        goal_rectangle_corners=common.to_tensor(
+                            merged_goal_rectangle_corners, device=self.device
+                        ),
+                        validate_goal_rectangle_corners=False,
                     )
                 )
 
@@ -350,7 +360,11 @@ class SequentialTaskEnv(SceneManipulationEnv):
                 self._make_goal(
                     radius=self.place_cfg.obj_goal_thresh,
                     name=f"goal_{subtask_num}",
-                    goal_type="cylinder",
+                    goal_type=(
+                        "cylinder"
+                        if self.place_cfg.goal_type == "zone"
+                        else self.place_cfg.goal_type
+                    ),
                 )
                 for subtask_num in range(self.seq_task_len)
             ]
@@ -533,6 +547,7 @@ class SequentialTaskEnv(SceneManipulationEnv):
                 ) = self._place_check_success(
                     self.subtask_objs[subtask_num],
                     self.subtask_goals[subtask_num],
+                    subtask.goal_rectangle_corners,
                     env_idx,
                 )
             elif isinstance(subtask, NavigateSubtask):
@@ -590,21 +605,56 @@ class SequentialTaskEnv(SceneManipulationEnv):
         self,
         obj: Actor,
         obj_goal: Actor,
+        goal_rectangle_corners: torch.Tensor,
         env_idx: torch.Tensor,
     ):
         is_grasped = self.agent.is_grasping(obj, max_angle=30)[env_idx]
-        xy_correct = (
-            torch.norm(
-                obj.pose.p[env_idx, :2] - obj_goal.pose.p[env_idx, :2],
-                dim=1,
+        if self.place_cfg.goal_type == "zone":
+            # (0 <= AM•AB <= AB•AB) and (0 <= AM•AD <=  AD•AD)
+            As, Bs, Ds = (
+                goal_rectangle_corners[env_idx, 0, :2],
+                goal_rectangle_corners[env_idx, 1, :2],
+                goal_rectangle_corners[env_idx, 3, :2],
             )
-            <= self.place_cfg.obj_goal_thresh
-        )
-        z_correct = (
-            torch.abs(obj.pose.p[env_idx, 2] - obj_goal.pose.p[env_idx, 2])
-            <= self.place_cfg.obj_goal_thresh
-        )
-        obj_at_goal = xy_correct & z_correct
+            Ms = obj.pose.p[env_idx, :2]
+
+            AM = Ms - As
+            AB = Bs - As
+            AD = Ds - As
+
+            AM_dot_AB = torch.sum(AM * AB, dim=1)
+            AB_dot_AB = torch.sum(AB * AB, dim=1)
+            AM_dot_AD = torch.sum(AM * AD, dim=1)
+            AD_dot_AD = torch.sum(AD * AD, dim=1)
+
+            xy_correct = (
+                (0 <= AM_dot_AB)
+                & (AM_dot_AB <= AB_dot_AB)
+                & (0 <= AM_dot_AD)
+                & (AM_dot_AD <= AD_dot_AD)
+            )
+            z_correct = (
+                torch.abs(obj.pose.p[env_idx, 2] - obj_goal.pose.p[env_idx, 2])
+                <= self.place_cfg.obj_goal_thresh
+            )
+            obj_at_goal = xy_correct & z_correct
+        elif self.place_cfg.goal_type == "cylinder":
+            xy_correct = (
+                torch.norm(
+                    obj.pose.p[env_idx, :2] - obj_goal.pose.p[env_idx, :2],
+                    dim=1,
+                )
+                <= self.place_cfg.obj_goal_thresh
+            )
+            z_correct = (
+                torch.abs(obj.pose.p[env_idx, 2] - obj_goal.pose.p[env_idx, 2])
+                <= self.place_cfg.obj_goal_thresh
+            )
+            obj_at_goal = xy_correct & z_correct
+        else:
+            raise NotImplementedError(
+                f"place_cfg.goal_type={self.place_cfg.goal_type} is not yet supported"
+            )
         ee_rest = (
             torch.norm(
                 self.agent.tcp_pose.p[env_idx] - self.ee_rest_world_pose.p[env_idx],
