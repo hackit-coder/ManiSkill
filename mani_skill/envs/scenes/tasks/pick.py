@@ -86,12 +86,23 @@ class PickSubtaskTrainEnv(SubtaskTrainEnv):
                     if isinstance(env_navigable_positions, trimesh.Trimesh):
                         env_navigable_positions = env_navigable_positions.vertices
                     positions = torch.tensor(env_navigable_positions)
-                    navigable_positions.append(
-                        positions[
-                            torch.norm(positions - center, dim=1)
-                            <= self.spawn_loc_radius
+                    ##########################################################################3
+                    # TODO: DELETE
+                    new_positions = positions[
+                        torch.norm(positions - center, dim=1) <= self.spawn_loc_radius
+                    ]
+                    if len(new_positions) < 1:
+                        new_positions = positions[
+                            torch.norm(positions - center, dim=1) <= 2
                         ]
-                    )
+                    navigable_positions.append(new_positions)
+                    # navigable_positions.append(
+                    #     positions[
+                    #         torch.norm(positions - center, dim=1)
+                    #         <= self.spawn_loc_radius
+                    #     ]
+                    # )
+                    ##########################################################################3
                 num_navigable_positions = torch.tensor(
                     [len(positions) for positions in navigable_positions]
                 ).int()
