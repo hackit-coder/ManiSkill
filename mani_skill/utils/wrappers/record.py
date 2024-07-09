@@ -267,6 +267,11 @@ class RecordEpisode(gym.Wrapper):
                 episodes=[],
             )
             if self._json_data["env_info"] is not None:
+                #######################3
+                # TODO DELETE
+                self._json_data["env_info"]["env_kwargs"].pop("task_plans", None)
+                # TODO DELETE
+                #######################3
                 self._json_data["env_info"][
                     "max_episode_steps"
                 ] = self.max_episode_steps
