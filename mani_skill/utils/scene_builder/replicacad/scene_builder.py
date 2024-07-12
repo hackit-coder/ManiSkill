@@ -82,6 +82,8 @@ class ReplicaCADSceneBuilder(SceneBuilder):
                 -  for now leave as-is since has smaller change in performance
             """
 
+            build_pos = [100, 100, 100]
+
             env_idx = [i for i, v in enumerate(build_config_idxs) if v == bci]
             unique_id = "scs-" + str(env_idx).replace(" ", "")
             build_cfg_path = self.build_configs[bci]
@@ -170,6 +172,9 @@ class ReplicaCADSceneBuilder(SceneBuilder):
                     else:
                         builder.add_multiple_convex_collisions_from_file(collision_file)
                     builder.set_scene_idxs(env_idx)
+                    builder.initial_pose = sapien.Pose(p=build_pos)
+                    build_pos[1] -= 10
+                    build_pos[2] -= 10
                     actor = builder.build(name=f"{unique_id}_{actor_name}")
                     self._default_object_poses.append((actor, pose))
 
