@@ -146,6 +146,7 @@ class SequentialTaskEnv(SceneManipulationEnv):
         self.task_plan: List[Subtask] = []
         last_subtask0 = None
         for subtask_num, parallel_subtasks in enumerate(zip(*sampled_subtask_lists)):
+            composite_subtask_uids = [subtask.uid for subtask in parallel_subtasks]
             subtask0: Subtask = parallel_subtasks[0]
 
             if isinstance(subtask0, PickSubtask):
@@ -162,7 +163,11 @@ class SequentialTaskEnv(SceneManipulationEnv):
                 )
                 self.subtask_goals.append(None)
 
-                self.task_plan.append(PickSubtask(obj_id=merged_obj_name))
+                self.task_plan.append(
+                    PickSubtask(
+                        obj_id=merged_obj_name,
+                    )
+                )
 
             elif isinstance(subtask0, PlaceSubtask):
                 parallel_subtasks: List[PlaceSubtask]
@@ -241,10 +246,14 @@ class SequentialTaskEnv(SceneManipulationEnv):
                 if isinstance(last_subtask0, PickSubtask):
                     last_subtask_obj = self.subtask_objs[-1]
                     self.subtask_objs.append(last_subtask_obj)
-                    self.task_plan.append(NavigateSubtask(obj_id=last_subtask_obj.name))
+                    self.task_plan.append(
+                        NavigateSubtask(
+                            obj_id=last_subtask_obj.name,
+                        )
+                    )
                 else:
                     self.subtask_objs.append(None)
-                    self.task_plan.append(NavigateSubtask())
+                    self.task_plan.append()
 
             else:
                 raise AttributeError(
@@ -252,6 +261,8 @@ class SequentialTaskEnv(SceneManipulationEnv):
                 )
 
             last_subtask0 = subtask0
+
+            self.task_plan[-1].composite_subtask_uids = composite_subtask_uids
 
         # add navigation goals for each Navigate Subtask depending on following subtask
         last_subtask = None

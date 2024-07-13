@@ -148,8 +148,6 @@ class BaseEnv(gym.Env):
         reconfiguration_freq: int = None,
         sim_backend: str = "auto",
     ):
-        
-        print("0", flush=True)
 
         self.num_envs = num_envs
         self.reconfiguration_freq = reconfiguration_freq if reconfiguration_freq is not None else 0
@@ -161,13 +159,9 @@ class BaseEnv(gym.Env):
             if robot_uids not in self.SUPPORTED_ROBOTS:
                 logger.warn(f"{robot_uids} is not in the task's list of supported robots. Code may not run as intended")
 
-        print("1", flush=True)
-
         if physx.is_gpu_enabled() and num_envs == 1 and (sim_backend == "auto" or sim_backend == "cpu"):
             logger.warn("GPU simulation has already been enabled on this process, switching to GPU backend")
             sim_backend == "gpu"
-
-        print("2", flush=True)
 
         if num_envs > 1 or sim_backend == "gpu":
             if not physx.is_gpu_enabled():
@@ -177,8 +171,6 @@ class BaseEnv(gym.Env):
             )  # TODO (stao): fix this for multi process support
         else:
             self.device = torch.device("cpu")
-        
-        print('3', flush=True)
 
         # raise a number of nicer errors
         if sim_backend == "cpu" and num_envs > 1:
@@ -191,8 +183,6 @@ class BaseEnv(gym.Env):
                 env.render_rgb_array() or the RecordEpisode wrapper to save videos of ray-traced results""")
             if num_envs > 1:
                 raise RuntimeError("""Currently you cannot run ray-tracing on more than one environment in a single process""")
-            
-        print('4', flush=True)
 
         # TODO (stao): move the merge code / handling union typed arguments outside here so classes inheriting BaseEnv only get
         # the already parsed sim config argument
@@ -231,8 +221,6 @@ class BaseEnv(gym.Env):
             sapien.render.set_ray_tracing_denoiser("optix")
         sapien.render.set_log_level(os.getenv("MS_RENDERER_LOG_LEVEL", "warn"))
 
-        print('5', flush=True)
-
         # Set simulation and control frequency
         self._sim_freq = self.sim_cfg.sim_freq
         self._control_freq = self.sim_cfg.control_freq
@@ -269,8 +257,6 @@ class BaseEnv(gym.Env):
         # Lighting
         self.enable_shadow = enable_shadow
 
-        print('6', flush=True)
-
         # Use a fixed (main) seed to enhance determinism
         self._main_seed = None
         self._set_main_rng(2022)
@@ -278,11 +264,7 @@ class BaseEnv(gym.Env):
             torch.zeros(self.num_envs, device=self.device, dtype=torch.int32)
         )
 
-        print('7', flush=True)
-
         obs, _ = self.reset(seed=2022, options=dict(reconfigure=True))
-
-        print('8', flush=True)
 
         self._init_raw_obs = common.to_cpu_tensor(obs)
         """the raw observation returned by the env.reset (a cpu torch tensor/dict of tensors). Useful for future observation wrappers to use to auto generate observation spaces"""
@@ -295,8 +277,6 @@ class BaseEnv(gym.Env):
         # initialize the cached properties
         self.single_observation_space
         self.observation_space
-
-        print('9', flush=True)
 
     def update_obs_space(self, obs: torch.Tensor):
         """call this function if you modify the observations returned by env.step and env.reset via an observation wrapper."""
@@ -551,27 +531,17 @@ class BaseEnv(gym.Env):
         shape changes each time and the faucet model changes each time respectively.
         """
 
-        print("set up scene, loading agent, scene, lighting...", flush=True)
         self._clear()
         # load everything into the scene first before initializing anything
         self._setup_scene()
-        print("scene set up!", flush=True)
         self._load_agent(options)
-        print("agent loaded!", flush=True)
         self._load_scene(options)
-        print("scene loaded!", flush=True)
 
         self._load_lighting(options)
-        print("lighting loaded!", flush=True)
-
-        print("setting up gpu...", flush=True)
         if physx.is_gpu_enabled():
             self.scene._setup_gpu()
-        print("gpu set up!", flush=True)
         # for GPU sim, we have to setup sensors after we call setup gpu in order to enable loading mounted sensors as they depend on GPU buffer data
-        print("setting up sensors...", flush=True)
         self._setup_sensors(options)
-        print("sensors set up!", flush=True)
         if self._viewer is not None:
             self._setup_viewer()
         self._reconfig_counter = self.reconfiguration_freq
@@ -704,12 +674,8 @@ class BaseEnv(gym.Env):
         if reconfigure:
             with torch.random.fork_rng():
                 torch.manual_seed(seed=self._episode_seed)
-                print("reconfiguring...", flush=True)
                 self._reconfigure(options)
-                print("reconfigured!", flush=True)
-                print("after reconfiguring...", flush=True)
                 self._after_reconfigure(options)
-                print("after reconfigured!", flush=True)
 
         # TODO (stao): Reconfiguration when there is partial reset might not make sense and certainly broken here now.
         # Solution to resolve that would be to ensure tasks that do reconfigure more than once are single-env only / cpu sim only

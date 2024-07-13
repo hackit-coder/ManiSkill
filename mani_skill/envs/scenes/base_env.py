@@ -89,6 +89,11 @@ class SceneManipulationEnv(BaseEnv):
             self.build_config_idxs = options.pop(
                 "build_config_idxs", self.build_config_idxs
             )
+            self.init_config_idxs = options.pop("init_config_idxs", None)
+        else:
+            assert (
+                "build_config_idxs" not in options
+            ), "options dict cannot contain build_config_idxs without reconfigure=True"
             self.init_config_idxs = options.pop(
                 "init_config_idxs", self.init_config_idxs
             )

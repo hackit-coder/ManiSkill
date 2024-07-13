@@ -1,8 +1,12 @@
-from typing import List
+from typing import List, Dict
+from pathlib import Path
+from collections import defaultdict
 
 import torch
+import sapien.physx as physx
 
-from .sequential_task import SequentialTaskEnv
+from mani_skill.utils.structs import Pose
+from .sequential_task import SequentialTaskEnv, GOAL_POSE_Q
 from .planner import TaskPlan, Subtask
 
 
@@ -26,12 +30,8 @@ class SubtaskTrainEnv(SequentialTaskEnv):
         *args,
         robot_uids="fetch",
         task_plans: List[TaskPlan] = [],
-        # spawn randomization
-        randomize_arm=False,
-        randomize_base=False,
-        randomize_loc=False,
         # additional spawn randomization, shouldn't need to change
-        spawn_loc_radius=2,
+        spawn_data_fp=None,
         # colliison tracking
         robot_force_mult=0,
         robot_force_penalty_min=0,
@@ -45,11 +45,9 @@ class SubtaskTrainEnv(SequentialTaskEnv):
             tp0.subtasks[0], Subtask
         ), f"Task plans for {self.__class__.__name__} must be one {Subtask.__name__} long"
 
-        # randomization vals
-        self.randomize_arm = randomize_arm
-        self.randomize_base = randomize_base
-        self.randomize_loc = randomize_loc
-        self.spawn_loc_radius = spawn_loc_radius
+        # spawn vals
+        self.spawn_data_fp = Path(spawn_data_fp)
+        assert self.spawn_data_fp.exists()
 
         # force reward hparams
         self.robot_force_mult = robot_force_mult
@@ -67,16 +65,12 @@ class SubtaskTrainEnv(SequentialTaskEnv):
         super().__init__(*args, robot_uids=robot_uids, task_plans=task_plans, **kwargs)
 
     # -------------------------------------------------------------------------------------------------
-    # COLLISION TRACKING
+    # RECONFIGURE AND INIT
     # -------------------------------------------------------------------------------------------------
 
     def reset(self, *args, **kwargs):
         self.robot_cumulative_force = torch.zeros(self.num_envs, device=self.device)
         return super().reset(*args, **kwargs)
-
-    # -------------------------------------------------------------------------------------------------
-    # FORCE TRACKING RECONFIGURE
-    # -------------------------------------------------------------------------------------------------
 
     def _after_reconfigure(self, options):
         force_rew_ignore_links = [
@@ -88,6 +82,46 @@ class SubtaskTrainEnv(SequentialTaskEnv):
             for link in self.agent.robot.get_links()
             if link not in force_rew_ignore_links
         ]
+        self.spawn_data = torch.load(self.spawn_data_fp, map_location=self.device)
+
+    def _initialize_episode(self, env_idx, options):
+        with torch.device(self.device):
+            super()._initialize_episode(env_idx, options)
+
+            current_subtask = self.task_plan[0]
+            batched_spawn_data = defaultdict(list)
+            for subtask_uid in current_subtask.composite_subtask_uids:
+                spawn_data: Dict[str, torch.Tensor] = self.spawn_data[subtask_uid]
+                spawn_selection_idx = None
+                for k, v in spawn_data.items():
+                    if spawn_selection_idx is None:
+                        spawn_selection_idx = torch.randint(
+                            low=0, high=len(v), size=(1,)
+                        )
+                    batched_spawn_data[k].append(v[spawn_selection_idx])
+            batched_spawn_data = dict(
+                (k, torch.cat(v, dim=0)) for k, v in batched_spawn_data.items()
+            )
+            if "robot_pos" in batched_spawn_data:
+                self.agent.robot.set_pose(
+                    Pose.create_from_pq(p=batched_spawn_data["robot_pos"])
+                )
+            if "robot_qpos" in batched_spawn_data:
+                self.agent.robot.set_qpos(batched_spawn_data["robot_qpos"])
+            if "obj_raw_pose_wrt_tcp" in batched_spawn_data:
+                if physx.is_gpu_enabled():
+                    self.scene._gpu_apply_all()
+                    self.scene.px.gpu_update_articulation_kinematics()
+                    self.scene._gpu_fetch_all()
+                self.subtask_objs[0].set_pose(
+                    self.agent.tcp_pose
+                    * Pose.create(batched_spawn_data["obj_raw_pose_wrt_tcp"])
+                )
+            if "goal_pos" in batched_spawn_data:
+                self.subtask_goals[0].set_pose(
+                    Pose.create_from_pq(q=GOAL_POSE_Q, p=batched_spawn_data["goal_pos"])
+                )
+                self.task_plan[0].goal_pos = batched_spawn_data["goal_pos"]
 
     # -------------------------------------------------------------------------------------------------
 

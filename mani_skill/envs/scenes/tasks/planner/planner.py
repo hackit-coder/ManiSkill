@@ -22,10 +22,14 @@ RectCorners = Union[
 class Subtask:
     type: str = field(init=False)
     uid: str = field(init=False)
+    composite_subtask_uids: List[str] = field(init=False)
 
     def __post_init__(self):
         assert self.type in ["pick", "place", "navigate"]
-        self.uid = self.type + "_" + shortuuid.ShortUUID().random(length=6)
+        if getattr(self, "uid", None) is None:
+            self.uid = self.type + "_" + shortuuid.ShortUUID().random(length=6)
+        if getattr(self, "composite_subtask_uids", None) is None:
+            self.composite_subtask_uids = [self.uid]
 
 
 @dataclass
@@ -33,14 +37,12 @@ class SubtaskConfig:
     task_id: int
     horizon: int = 200
     ee_rest_thresh: float = 0.05
-    robot_init_qpos_noise: float = 0.2
     robot_resting_qpos_tolerance: float = 0.2
     robot_resting_qpos_tolerance_grasping: float = 0.6
 
     def __post_init__(self):
         assert self.horizon > 0
         assert self.ee_rest_thresh >= 0
-        assert self.robot_init_qpos_noise >= 0
         assert self.robot_resting_qpos_tolerance >= 0
         assert self.robot_resting_qpos_tolerance_grasping >= 0
 
