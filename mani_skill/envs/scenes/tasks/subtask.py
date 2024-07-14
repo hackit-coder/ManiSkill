@@ -86,6 +86,7 @@ class SubtaskTrainEnv(SequentialTaskEnv):
 
     def _initialize_episode(self, env_idx, options):
         with torch.device(self.device):
+            options["sample_place_goal_pos"] = False
             super()._initialize_episode(env_idx, options)
 
             current_subtask = self.task_plan[0]
@@ -122,6 +123,9 @@ class SubtaskTrainEnv(SequentialTaskEnv):
                     Pose.create_from_pq(q=GOAL_POSE_Q, p=batched_spawn_data["goal_pos"])
                 )
                 self.task_plan[0].goal_pos = batched_spawn_data["goal_pos"]
+                self.task_plan[0].goal_rectangle_corners = batched_spawn_data[
+                    "goal_rectangle_corners"
+                ]
 
     # -------------------------------------------------------------------------------------------------
 
