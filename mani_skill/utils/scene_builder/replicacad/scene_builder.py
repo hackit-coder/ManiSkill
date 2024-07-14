@@ -80,7 +80,7 @@ class ReplicaCADSceneBuilder(SceneBuilder):
                 -  for now leave as-is since has smaller change in performance
             """
 
-            build_pos = [100, 100, 100]
+            build_pos = [0, 0, 0]
 
             env_idx = [i for i, v in enumerate(build_config_idxs) if v == bci]
             unique_id = "scs-" + str(env_idx).replace(" ", "")
