@@ -169,7 +169,6 @@ class ReplicaCADSceneBuilder(SceneBuilder):
                         builder.add_multiple_convex_collisions_from_file(collision_file)
                     builder.set_scene_idxs(env_idx)
                     builder.initial_pose = sapien.Pose(p=build_pos)
-                    build_pos[1] -= 10
                     build_pos[2] -= 10
                     actor = builder.build(name=f"{unique_id}_{actor_name}")
                     self._default_object_poses.append((actor, pose))
