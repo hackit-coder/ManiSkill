@@ -191,7 +191,7 @@ class ReplicaCADRearrangeSceneBuilder(ReplicaCADSceneBuilder):
             num_ycb_objs_to_build = rcad_config_to_num_ycb_objs_to_build[rcad_config]
 
             ycb_objs = defaultdict(list)
-            build_pos = [0, 0, 10]
+            build_pos = [0, 0, 100]
             for actor_id, num_objs in num_ycb_objs_to_build.items():
                 for no in range(num_objs):
                     obj_instance_name = f"env-{env_num}_{actor_id}-{no}"

@@ -80,7 +80,7 @@ class ReplicaCADSceneBuilder(SceneBuilder):
                 -  for now leave as-is since has smaller change in performance
             """
 
-            build_pos = [0, 0, 0]
+            build_pos = [0, 0, -100]
 
             env_idx = [i for i, v in enumerate(build_config_idxs) if v == bci]
             unique_id = "scs-" + str(env_idx).replace(" ", "")
@@ -228,6 +228,11 @@ class ReplicaCADSceneBuilder(SceneBuilder):
                         articulation
                     )
 
+                for link in articulation.links:
+                    link.set_collision_group_bit(
+                        group=2, bit_idx=FETCH_WHEELS_COLLISION_BIT, bit=1
+                    )
+
             # ReplicaCAD also specifies where to put lighting
             with open(
                 osp.join(
@@ -273,6 +278,9 @@ class ReplicaCADSceneBuilder(SceneBuilder):
             shared_name="scene_background",
         )
 
+        # For the purposes of physical simulation, we disable collisions between the Fetch robot and the scene background
+        self.disable_fetch_move_collisions(self.bg)
+
     def initialize(self, env_idx: torch.Tensor):
         if self.env.robot_uids == "fetch":
             agent: Fetch = self.env.agent
@@ -280,9 +288,6 @@ class ReplicaCADSceneBuilder(SceneBuilder):
             agent.reset(rest_keyframe.qpos)
 
             agent.robot.set_pose(sapien.Pose([-1, 0, 0.02]))
-
-            # For the purposes of physical simulation, we disable collisions between the Fetch robot and the scene background
-            self.disable_fetch_move_collisions(self.bg)
         else:
             raise NotImplementedError(self.env.robot_uids)
 
