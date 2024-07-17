@@ -593,9 +593,9 @@ class SequentialTaskEnv(SceneManipulationEnv):
             for k, v in subtask_success_checkers.items():
                 if k not in success_checkers:
                     success_checkers[k] = torch.zeros(
-                        self.num_envs, device=self.device, dtype=torch.bool
+                        self.num_envs, device=self.device, dtype=v.dtype
                     )
-                success_checkers[k][env_idx] = subtask_success_checkers[k]
+                success_checkers[k][env_idx] = v
 
         return subtask_success, success_checkers
 
@@ -626,6 +626,10 @@ class SequentialTaskEnv(SceneManipulationEnv):
                 ee_rest=ee_rest,
                 robot_rest=robot_rest,
                 is_static=is_static,
+                robot_to_targ_dist=torch.norm(
+                    self.agent.base_link.pose.p[env_idx, :2] - obj.pose.p[env_idx, :2],
+                    dim=1,
+                ),
             ),
         )
 
@@ -705,6 +709,11 @@ class SequentialTaskEnv(SceneManipulationEnv):
                 ee_rest=ee_rest,
                 robot_rest=robot_rest,
                 is_static=is_static,
+                robot_to_targ_dist=torch.norm(
+                    self.agent.base_link.pose.p[env_idx, :2]
+                    - obj_goal.pose.p[env_idx, :2],
+                    dim=1,
+                ),
             ),
         )
 
