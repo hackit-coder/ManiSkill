@@ -90,14 +90,6 @@ class PlaceSubtaskTrainEnv(SubtaskTrainEnv):
 
         return super()._after_reconfigure(options)
 
-    def process_task_plan(self, sampled_subtask_lists: List[List[PlaceSubtask]]):
-
-        self.current_place_obj_ids = [
-            "-".join(subtask_list[0].obj_id.split("-")[:-1])
-            for subtask_list in sampled_subtask_lists
-        ]
-        super().process_task_plan(sampled_subtask_lists)
-
     def _initialize_episode(self, env_idx, options):
         with torch.device(self.device):
             super()._initialize_episode(env_idx, options)
