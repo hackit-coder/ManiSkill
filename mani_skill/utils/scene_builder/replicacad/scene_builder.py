@@ -287,7 +287,7 @@ class ReplicaCADSceneBuilder(SceneBuilder):
             rest_keyframe = agent.keyframes["rest"]
             agent.reset(rest_keyframe.qpos)
 
-            agent.robot.set_pose(sapien.Pose([-1, 0, 0.02]))
+            agent.robot.set_pose(sapien.Pose([-5, 0, 0.02]))
         else:
             raise NotImplementedError(self.env.robot_uids)
 
