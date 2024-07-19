@@ -137,9 +137,7 @@ class SequentialTaskEnv(SceneManipulationEnv):
     # PROCESS TASKS
     # -------------------------------------------------------------------------------------------------
 
-    def process_task_plan(
-        self, sampled_subtask_lists: List[List[Subtask]], sample_place_goal_pos=True
-    ):
+    def process_task_plan(self, sampled_subtask_lists: List[List[Subtask]]):
 
         self.subtask_objs: List[Actor] = []
         self.subtask_goals: List[Actor] = []
@@ -181,76 +179,25 @@ class SequentialTaskEnv(SceneManipulationEnv):
                 )
                 self.subtask_goals.append(self.premade_place_goal_list[subtask_num])
 
-                # TODO (arth): see if env runs faster when using torch
-                if sample_place_goal_pos:
-                    merged_goal_rectangle_corners = []
-                    for subtask in parallel_subtasks:
-                        grcs = np.array(
-                            subtask.goal_rectangle_corners
-                            if subtask.goal_rectangle_probs is None
-                            else self.np_random.choice(
-                                subtask.goal_rectangle_corners,
-                                p=subtask.goal_rectangle_probs,
-                            )
-                        )
-                        merged_goal_rectangle_corners.append(grcs)
-                    merged_goal_rectangle_corners = np.array(
-                        merged_goal_rectangle_corners
-                    )
-                    Bs = merged_goal_rectangle_corners[:, 1]
-                    BCs = (
-                        merged_goal_rectangle_corners[:, 2]
-                        - merged_goal_rectangle_corners[:, 1]
-                    )
-                    BAs = (
-                        merged_goal_rectangle_corners[:, 0]
-                        - merged_goal_rectangle_corners[:, 1]
-                    )
+                merged_goal_pos = common.to_tensor(
+                    [subtask.goal_pos for subtask in parallel_subtasks]
+                )
+                mergerd_goal_rectangle_corners = common.to_tensor(
+                    [subtask.goal_rectangle_corners for subtask in parallel_subtasks]
+                )
 
-                    u_prop, v_prop = np.clip(
-                        self.place_cfg.obj_goal_thresh
-                        / np.linalg.norm(BCs, axis=1, keepdims=True),
-                        0,
-                        0.5,
-                    ), np.clip(
-                        self.place_cfg.obj_goal_thresh
-                        / np.linalg.norm(BAs, axis=1, keepdims=True),
-                        0,
-                        0.5,
-                    )
-                    u, v = self.np_random.uniform(
-                        low=u_prop, high=1 - u_prop, size=(len(parallel_subtasks), 1)
-                    ), self.np_random.uniform(
-                        low=v_prop, high=1 - v_prop, size=(len(parallel_subtasks), 1)
-                    )
+                self.subtask_goals[-1].set_pose(
+                    Pose.create_from_pq(q=GOAL_POSE_Q, p=merged_goal_pos)
+                )
 
-                    goal_pos = ((BCs * u + BAs * v) + Bs).tolist()
-                    self.premade_place_goal_list[subtask_num].set_pose(
-                        Pose.create_from_pq(
-                            q=GOAL_POSE_Q,
-                            p=torch.tensor(goal_pos),
-                        )
+                self.task_plan.append(
+                    PlaceSubtask(
+                        obj_id=merged_obj_name,
+                        goal_pos=merged_goal_pos,
+                        goal_rectangle_corners=mergerd_goal_rectangle_corners,
+                        validate_goal_rectangle_corners=False,
                     )
-
-                    self.task_plan.append(
-                        PlaceSubtask(
-                            obj_id=merged_obj_name,
-                            goal_pos=goal_pos,
-                            goal_rectangle_corners=common.to_tensor(
-                                merged_goal_rectangle_corners, device=self.device
-                            ),
-                            validate_goal_rectangle_corners=False,
-                        )
-                    )
-                else:
-                    # NOTE (arth): in this case, it's assumed that the goal_pos/goal_rectangle_corners
-                    #       values will be added later on, e.g. in SubtaskTrainEnv
-                    self.task_plan.append(
-                        PlaceSubtask(
-                            obj_id=merged_obj_name,
-                            validate_goal_rectangle_corners=False,
-                        )
-                    )
+                )
 
             elif isinstance(subtask0, NavigateSubtask):
                 self.premade_place_goal_list[subtask_num].set_pose(
@@ -356,7 +303,7 @@ class SequentialTaskEnv(SceneManipulationEnv):
             goal = actors.build_cylinder(
                 self.scene,
                 radius=radius,
-                half_length=radius,
+                half_length=radius / 2,
                 color=color,
                 name=name,
                 body_type="kinematic",
@@ -460,10 +407,8 @@ class SequentialTaskEnv(SceneManipulationEnv):
                 for tp in sampled_task_plans
             ]
             super()._initialize_episode(env_idx, options)
-            sample_place_goal_pos = options.pop("sample_place_goal_pos", True)
             self.process_task_plan(
                 sampled_subtask_lists=[tp.subtasks for tp in sampled_task_plans],
-                sample_place_goal_pos=sample_place_goal_pos,
             )
 
             self.subtask_pointer[env_idx] = 0
@@ -697,6 +642,14 @@ class SequentialTaskEnv(SceneManipulationEnv):
                 <= self.place_cfg.obj_goal_thresh
             )
             obj_at_goal = xy_correct & z_correct
+        elif self.place_cfg.goal_type == "sphere":
+            obj_at_goal = (
+                torch.norm(
+                    obj.pose.p[env_idx] - obj_goal.pose.p[env_idx],
+                    dim=1,
+                )
+                <= self.place_cfg.obj_goal_thresh
+            )
         else:
             raise NotImplementedError(
                 f"place_cfg.goal_type={self.place_cfg.goal_type} is not yet supported"
