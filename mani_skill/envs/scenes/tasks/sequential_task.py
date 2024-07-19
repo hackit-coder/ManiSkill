@@ -626,10 +626,24 @@ class SequentialTaskEnv(SceneManipulationEnv):
                 ee_rest=ee_rest,
                 robot_rest=robot_rest,
                 is_static=is_static,
-                robot_to_targ_dist=torch.norm(
-                    self.agent.base_link.pose.p[env_idx, :2] - obj.pose.p[env_idx, :2],
-                    dim=1,
-                ),
+                # robot_to_targ_dist=torch.norm(
+                #     self.agent.base_link.pose.p[env_idx, :2] - obj.pose.p[env_idx, :2],
+                #     dim=1,
+                # ),
+                # robot_target_pairwise_force=(
+                #     torch.norm(
+                #         self.scene.get_pairwise_contact_forces(
+                #             self.agent.finger1_link, obj
+                #         ),
+                #         dim=1,
+                #     )
+                #     + torch.norm(
+                #         self.scene.get_pairwise_contact_forces(
+                #             self.agent.finger2_link, obj
+                #         ),
+                #         dim=1,
+                #     )
+                # ),
             ),
         )
 
@@ -709,11 +723,25 @@ class SequentialTaskEnv(SceneManipulationEnv):
                 ee_rest=ee_rest,
                 robot_rest=robot_rest,
                 is_static=is_static,
-                robot_to_targ_dist=torch.norm(
-                    self.agent.base_link.pose.p[env_idx, :2]
-                    - obj_goal.pose.p[env_idx, :2],
-                    dim=1,
-                ),
+                # robot_to_targ_dist=torch.norm(
+                #     self.agent.base_link.pose.p[env_idx, :2]
+                #     - obj_goal.pose.p[env_idx, :2],
+                #     dim=1,
+                # ),
+                # robot_target_pairwise_force=(
+                #     torch.norm(
+                #         self.scene.get_pairwise_contact_forces(
+                #             self.agent.finger1_link, obj
+                #         ),
+                #         dim=1,
+                #     )
+                #     + torch.norm(
+                #         self.scene.get_pairwise_contact_forces(
+                #             self.agent.finger2_link, obj
+                #         ),
+                #         dim=1,
+                #     )
+                # ),
             ),
         )
 
