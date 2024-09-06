@@ -72,25 +72,23 @@ def solve(env: PegInsertionSideEnv, seed=None, debug=False, vis=False):
     # -------------------------------------------------------------------------- #
     # Align Peg
     # -------------------------------------------------------------------------- #
-
     # align the peg with the hole
-    insert_pose = env.goal_pose * peg_init_pose.inv() * grasp_pose
+    insert_pose = env.goal_pose * peg_init_pose.inv() * env.agent.tcp.pose
     offset = sapien.Pose([-0.01 - env.peg_half_sizes[0, 0], 0, 0])
     pre_insert_pose = insert_pose * (offset)
     res = planner.move_to_pose_with_screw(pre_insert_pose)
     if res == -1: return res
     # refine the insertion pose
-    for i in range(3):
-        delta_pose = env.goal_pose * (offset) * env.peg.pose.inv()
+    for i in range(2):
+        delta_pose = env.goal_pose * offset * env.peg.pose.inv()
         pre_insert_pose = delta_pose * pre_insert_pose
-        res = planner.move_to_pose_with_screw(pre_insert_pose)
+        res = planner.move_to_pose_with_screw(pre_insert_pose, refine_steps=3)
         if res == -1: return res
-
+        insert_pose = delta_pose * insert_pose
     # -------------------------------------------------------------------------- #
     # Insert
     # -------------------------------------------------------------------------- #
-    res = planner.move_to_pose_with_screw(insert_pose * (sapien.Pose([0.05, 0, 0])))
-    if res == -1: return res
+    res = planner.move_to_pose_with_screw(insert_pose)
     planner.close()
     return res
 
