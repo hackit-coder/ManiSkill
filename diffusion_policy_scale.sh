@@ -14,7 +14,9 @@ python -m mani_skill.trajectory.replay_trajectory \
   
 #   --num-procs 1 -b gpu --count 1000
 
+seed=0
+demos=9000
 python train.py --env-id PickCube-v1 \
-  --demo-path ~/.maniskill/demos/PickCube-v1/motionplanning/trajectory.state.pd_ee_delta_pos.cpu.h5 \
-  --control-mode "pd_joint_delta_pos" --sim-backend "cpu" --num-demos 100 --max_episode_steps 100 \
-  --total_iters 30000 
+  --demo-path ../../../demos/PickCube-v1/motionplanning/trajectory.state.pd_joint_delta_pos.cpu.h5 \
+  --control-mode "pd_joint_delta_pos" --sim-backend "cpu" --num-demos ${demos} --max_episode_steps 100 \
+  --total_iters 100000 --exp-name diffusion_policy-PickCube-v1-state-${demos}_motionplanning_demos-${seed}
