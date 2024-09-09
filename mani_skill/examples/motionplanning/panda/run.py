@@ -26,6 +26,7 @@ def parse_args(args=None):
     parser.add_argument("--traj-name", type=str, help="The name of the trajectory .h5 file that will be created.")
     parser.add_argument("--shader", default="default", type=str, help="Change shader used for rendering. Default is 'default' which is very fast. Can also be 'rt' for ray tracing and generating photo-realistic renders. Can also be 'rt-fast' for a faster but lower quality ray-traced renderer")
     parser.add_argument("--record-dir", type=str, default="demos", help="where to save the recorded trajectories")
+    parser.add_argument("--seed", type=int, default=0, help="seed for the random number generator. Trajectories are collected on environmnents reset with this seed to seed + num_traj")
     return parser.parse_args()
 
 def main(args):
@@ -55,7 +56,7 @@ def main(args):
     solve = MP_SOLUTIONS[env_id]
     print(f"Motion Planning Running on {env_id}")
     pbar = tqdm(range(args.num_traj))
-    seed = 0
+    seed = args.seed
     successes = []
     solution_episode_lengths = []
     failed_motion_plans = 0
